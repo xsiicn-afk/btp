@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# VS Code
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+
+# Database
+*.db
+
+# Exports
+exports/
+
+# Temporary files
+*.log
+*.tmp
+
+# Windows
+Thumbs.db
+Desktop.ini
