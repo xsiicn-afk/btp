@@ -1,19 +1,18 @@
 import sys
 
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication
+
+from ui.main_window import MainWindow
 
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+def main():
+    app = QApplication(sys.argv)
 
-        self.setWindowTitle("ByTop Production Suite")
-        self.resize(1400, 900)
+    window = MainWindow()
+    window.show()
+
+    sys.exit(app.exec())
 
 
-app = QApplication(sys.argv)
-
-window = MainWindow()
-window.show()
-
-sys.exit(app.exec())
+if __name__ == "__main__":
+    main()
