@@ -1,14 +1,39 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from models.additional_item import AdditionalItem
+from models.manufacturer import Manufacturer
+from models.page_layout import PageLayout
 
 
 @dataclass
 class LabelModel:
-    """Модель данных для отображения и печати этикетки."""
+    """
+    Производственная модель изделия.
 
-    # Название модели
-    title: str = "Системный блок ByTop PE"
+    Используется предпросмотром,
+    Excel, историей и печатью.
+    """
 
-    # Основные характеристики
+    # -------------------------------------------------
+    # Общая информация
+    # -------------------------------------------------
+
+    title: str = "Системный блок ЭпикумЛаб"
+
+    model_name: str = ""
+
+    internal_name: str = ""
+
+    manufacturer: Manufacturer = Manufacturer.EPICA
+
+    layout: PageLayout = (
+        PageLayout.ONE_SPEC_THREE_ADDRESS
+    )
+
+    # -------------------------------------------------
+    # Комплектующие
+    # -------------------------------------------------
+
     cpu: str = ""
     motherboard: str = ""
     cooler: str = ""
@@ -18,7 +43,28 @@ class LabelModel:
     case: str = ""
     psu: str = ""
 
-    # Служебная информация
+    # -------------------------------------------------
+    # Программное обеспечение
+    # -------------------------------------------------
+
+    operating_system: str = ""
+
+    # -------------------------------------------------
+    # Дополнительная комплектация
+    # -------------------------------------------------
+
+    additional_items: list[AdditionalItem] = field(
+        default_factory=list
+    )
+
+    # -------------------------------------------------
+    # Производство
+    # -------------------------------------------------
+
     serial: str = ""
+
+    article_code: int = 0
+
     article: str = ""
+
     date: str = ""

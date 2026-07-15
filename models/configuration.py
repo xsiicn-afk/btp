@@ -14,7 +14,12 @@ class Configuration:
     date: str = ""
 
     model_name: str = "Системный блок ByTop PE"
-
+    
+    # -------------------------------------------------
+    # Программное обеспечение
+    # -------------------------------------------------
+    operating_system: str = ""
+    
     def add_item(self, item: Item):
         self.items.append(item)
 
