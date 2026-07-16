@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
             self.preview_panel.manufacturer()
         )
 
-        self.current_label.page_layout = (
+        self.current_label.layout = (
             self.preview_panel.layout_mode()
         )
         self.components_table.set_data(
@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
             self.preview_panel.manufacturer()
         )
 
-        self.current_label.page_layout = (
+        self.current_label.layout = (
             self.preview_panel.layout_mode()
         )
         self.preview_panel.set_label(
@@ -311,8 +311,9 @@ class MainWindow(QMainWindow):
                 self,
                 "Нет данных",
                 "Сначала загрузите конфигурацию."
-            )
-            return
+        )
+
+        return
 
         if not self.current_label.serial:
 
@@ -320,12 +321,32 @@ class MainWindow(QMainWindow):
                 self,
                 "Нет изделия",
                 "Сначала нажмите «Новая сборка»."
-            )
+        )
+
+        return
+
+        dialog = PrintDialog(self)
+
+        if not dialog.exec():
+
             return
 
-        self.print_engine.print_to_printer(
-            self.current_label
+        self.current_label.layout = (
+        dialog.page_layout()
         )
+
+        copies = dialog.copies()
+
+        #
+        # Пока печатаем одинаковые экземпляры.
+        #
+
+        for _ in range(copies):
+            print("LABEL =", self.current_label.layout)
+            print("UI =", self.preview_panel.layout_mode())
+            self.print_engine.print_to_printer(
+                self.current_label
+            )
 
         QMessageBox.information(
             self,

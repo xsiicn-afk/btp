@@ -68,19 +68,7 @@ class DocumentOptions(QWidget):
             PageLayout.FOUR_SPEC,
         )
 
-        #
-        # Пока доступны
-        # только первые режимы
-        #
-
-        model = self.layout.model()
-
-        for row in (1, 2, 3):
-
-            item = model.item(row)
-
-            item.setEnabled(False)
-
+        
         layout.addRow(
             "Производитель:",
             self.manufacturer,

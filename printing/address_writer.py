@@ -1,3 +1,5 @@
+from models.page_layout import PageLayout
+
 from printing.date_formatter import production_date
 from printing.manufacturer_data import get_manufacturer_info
 
@@ -21,6 +23,8 @@ class AddressWriter:
 
         self.sheet = sheet
 
+    # ---------------------------------------------------------
+
     def write(self, label):
 
         info = get_manufacturer_info(
@@ -31,7 +35,31 @@ class AddressWriter:
             label.date,
         )
 
-        for title, tu, address, production in self.BLOCKS:
+        #
+        # Сколько адресов печатаем
+        #
+
+        if label.layout == PageLayout.ONE_SPEC_THREE_ADDRESS:
+
+            blocks = 3
+
+        elif label.layout == PageLayout.TWO_SPEC_TWO_ADDRESS:
+
+            blocks = 2
+
+        elif label.layout == PageLayout.THREE_SPEC_ONE_ADDRESS:
+
+            blocks = 1
+
+        else:
+
+            blocks = 0
+
+        #
+        # Заполняем нужное количество
+        #
+
+        for title, tu, address, production in self.BLOCKS[:blocks]:
 
             self.sheet.Range(title).Value = info.title
 

@@ -79,14 +79,7 @@ class ExcelCom:
         page_layout,
     ):
 
-        from models.page_layout import PageLayout
-
         page = self.specification_sheet().PageSetup
-
-        #
-        # Пока все режимы используют
-        # полный лист.
-        #
 
         page.PrintArea = "$A$1:$BJ$52"
 
@@ -163,10 +156,12 @@ class ExcelCom:
     def write_specification(
         self,
         label,
+        block="TOP_LEFT",
     ):
 
         SpecificationWriter(
-            self.specification_sheet()
+            self.specification_sheet(),
+            block,
         ).write(label)
 
     # ---------------------------------------------------------
@@ -185,19 +180,27 @@ class ExcelCom:
     def insert_serial_qr(
         self,
         filename,
+        block="TOP_LEFT",
     ):
 
         QrWriter(
-            self.specification_sheet()
-        ).serial(filename)
+            self.specification_sheet(),
+            block,
+        ).serial(
+            filename
+        )
 
     # ---------------------------------------------------------
 
     def insert_article_qr(
         self,
         filename,
+        block="TOP_LEFT",
     ):
 
         QrWriter(
-            self.specification_sheet()
-        ).article(filename)
+            self.specification_sheet(),
+            block,
+        ).article(
+            filename
+        )

@@ -24,6 +24,36 @@ class Database:
         cursor = self.connection.cursor()
 
         # =====================================================
+        # Пользователи
+        # =====================================================
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users(
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                name TEXT UNIQUE NOT NULL,
+
+                active INTEGER DEFAULT 1
+
+            )
+            """
+        )
+
+        cursor.executemany(
+            """
+            INSERT OR IGNORE INTO users(name)
+            VALUES(?)
+            """,
+            [
+                ("Иванов",),
+                ("Петров",),
+                ("Сидоров",),
+            ]
+        )
+
+        # =====================================================
         # Справочник моделей
         # =====================================================
 
@@ -82,6 +112,8 @@ class Database:
             """
         )
 
+        self._upgrade_builds(cursor)
+
         # =====================================================
         # Настройки
         # =====================================================
@@ -99,6 +131,66 @@ class Database:
         )
 
         self.connection.commit()
+
+    # ---------------------------------------------------------
+
+    def _upgrade_builds(self, cursor):
+
+        cursor.execute("PRAGMA table_info(builds)")
+
+        existing = {
+            row["name"]
+            for row in cursor.fetchall()
+        }
+
+        columns = {
+
+            "created_by":
+                "TEXT",
+
+            "modified_at":
+                "TEXT",
+
+            "modified_by":
+                "TEXT",
+
+            "version":
+                "INTEGER DEFAULT 1",
+
+            "spec_printed_at":
+                "TEXT",
+
+            "spec_printed_by":
+                "TEXT",
+
+            "passport_printed_at":
+                "TEXT",
+
+            "passport_printed_by":
+                "TEXT",
+
+            "sticker_printed_at":
+                "TEXT",
+
+            "sticker_printed_by":
+                "TEXT",
+
+            "deleted":
+                "INTEGER DEFAULT 0"
+
+        }
+
+        for name, sql_type in columns.items():
+
+            if name in existing:
+                continue
+
+            cursor.execute(
+                f"""
+                ALTER TABLE builds
+                ADD COLUMN {name} {sql_type}
+                """
+            )
 
     # ---------------------------------------------------------
 
