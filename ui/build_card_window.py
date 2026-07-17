@@ -1,41 +1,76 @@
-from pathlib import Path
-
 from PySide6.QtWidgets import (
-    QFileDialog,
     QMainWindow,
     QMessageBox,
 )
 
 from models.label_model import LabelModel
+
 from printing.print_engine import PrintEngine
+
+from services.build_history_service import (
+    BuildHistoryService,
+)
+
 from ui.build_card import BuildCard
 
 
 class BuildCardWindow(QMainWindow):
 
     def __init__(self):
+
         super().__init__()
 
-        self.setWindowTitle("Карточка изделия")
-        self.resize(700, 800)
+        self.setWindowTitle(
+            "Карточка изделия"
+        )
 
-        self.card = BuildCard()
-        self.setCentralWidget(self.card)
+        self.resize(
+            850,
+            900,
+        )
+
+        #
+        # Модель
+        #
+
+        self.label: LabelModel | None = None
+
+        #
+        # Сервисы
+        #
+
+        self.history = BuildHistoryService()
 
         self.print_engine = PrintEngine()
 
-        self.label = None
+        #
+        # Интерфейс
+        #
+
+        self.card = BuildCard()
+
+        self.setCentralWidget(
+            self.card
+        )
 
         #
         # Сигналы
         #
 
-        self.card.pdf_requested.connect(
-            self.export_pdf
+        self.card.save_requested.connect(
+            self.save
         )
 
-        self.card.print_requested.connect(
-            self.print_label
+        self.card.specification_requested.connect(
+            self.print_specification
+        )
+
+        self.card.passport_requested.connect(
+            self.print_passport
+        )
+
+        self.card.sticker_requested.connect(
+            self.print_sticker
         )
 
     # ---------------------------------------------------------
@@ -47,53 +82,253 @@ class BuildCardWindow(QMainWindow):
 
         self.label = label
 
-        self.card.set_label(label)
+        self.card.set_label(
+            label
+        )
+
+        self.card.set_print_enabled(
+            True
+        )
+
+        self.update_title()
 
     # ---------------------------------------------------------
 
-    def export_pdf(self):
+    def update_title(
+        self,
+    ):
 
         if self.label is None:
+
+            self.setWindowTitle(
+                "Карточка изделия"
+            )
+
             return
 
-        filename = (
-            f"SN{self.label.serial}.pdf"
-        )
+        title = self.label.title
 
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Экспорт PDF",
-            str(Path.home() / filename),
-            "PDF (*.pdf)",
-        )
+        if not title:
 
-        if not path:
-            return
+            title = self.label.internal_name
 
-        self.print_engine.export_pdf(
-            self.label,
-            path,
-        )
-
-        QMessageBox.information(
-            self,
-            "Готово",
-            "PDF успешно создан."
+        self.setWindowTitle(
+            f"{self.label.serial} — {title}"
         )
 
     # ---------------------------------------------------------
 
-    def print_label(self):
+    def clear(
+        self,
+    ):
+
+        self.label = None
+
+        self.card.clear()
+
+        self.update_title()
+    # ---------------------------------------------------------
+
+    def save(
+        self,
+    ):
 
         if self.label is None:
+
+            return
+
+        try:
+
+            #
+            # Пока сохраняем только новые изделия.
+            # Полноценное редактирование с увеличением
+            # версии добавим следующим этапом.
+            #
+
+            exists = self.history.load_label(
+                self.label.serial
+            )
+
+            if exists is None:
+
+                self.history.save(
+                    self.label
+                )
+
+            QMessageBox.information(
+                self,
+                "Сохранено",
+                "Изделие успешно сохранено."
+            )
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                str(error)
+            )
+
+    # ---------------------------------------------------------
+
+    def print_specification(
+        self,
+    ):
+
+        if self.label is None:
+
             return
 
         self.print_engine.print_to_printer(
             self.label
         )
 
+        self.history.print_specification(
+            self.label.serial
+        )
+
+        self.card.set_specification_printed(
+            True
+        )
+
         QMessageBox.information(
             self,
             "Печать",
-            "Документ отправлен на принтер."
+            "Спецификация отправлена на печать."
+        )
+
+    # ---------------------------------------------------------
+
+    def print_passport(
+        self,
+    ):
+
+        if self.label is None:
+
+            return
+
+        #
+        # Пока используется тот же PrintEngine.
+        #
+
+        self.print_engine.print_to_printer(
+            self.label
+        )
+
+        self.history.print_passport(
+            self.label.serial
+        )
+
+        self.card.set_passport_printed(
+            True
+        )
+
+        QMessageBox.information(
+            self,
+            "Печать",
+            "Паспорт отправлен на печать."
+        )
+
+    # ---------------------------------------------------------
+
+    def print_sticker(
+        self,
+    ):
+
+        if self.label is None:
+
+            return
+
+        #
+        # Пока используется тот же PrintEngine.
+        #
+
+        self.print_engine.print_to_printer(
+            self.label
+        )
+
+        self.history.print_sticker(
+            self.label.serial
+        )
+
+        self.card.set_sticker_printed(
+            True
+        )
+
+        QMessageBox.information(
+            self,
+            "Печать",
+            "Стикер отправлен на печать."
+        )
+    # ---------------------------------------------------------
+
+    def current_label(
+        self,
+    ) -> LabelModel | None:
+
+        return self.label
+
+    # ---------------------------------------------------------
+
+    def has_label(
+        self,
+    ) -> bool:
+
+        return self.label is not None
+
+    # ---------------------------------------------------------
+
+    def refresh(
+        self,
+    ):
+
+        if self.label is None:
+
+            return
+
+        self.card.set_label(
+            self.label
+        )
+
+        self.update_title()
+
+    # ---------------------------------------------------------
+
+    def show_message(
+        self,
+        title: str,
+        text: str,
+    ):
+
+        QMessageBox.information(
+            self,
+            title,
+            text,
+        )
+
+    # ---------------------------------------------------------
+
+    def show_error(
+        self,
+        title: str,
+        text: str,
+    ):
+
+        QMessageBox.critical(
+            self,
+            title,
+            text,
+        )
+
+    # ---------------------------------------------------------
+
+    def closeEvent(
+        self,
+        event,
+    ):
+
+        self.label = None
+
+        super().closeEvent(
+            event
         )

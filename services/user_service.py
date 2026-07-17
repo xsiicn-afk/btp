@@ -2,12 +2,24 @@ from database.database import Database
 
 
 class UserService:
+    """
+    Глобальный сервис текущего пользователя.
 
-    def __init__(self):
+    Один экземпляр на всё приложение.
+    """
 
-        self.database = Database()
+    _instance = None
+    _current_user = None
 
-        self._current_user = None
+    def __new__(cls):
+
+        if cls._instance is None:
+
+            cls._instance = super().__new__(cls)
+
+            cls._instance.database = Database()
+
+        return cls._instance
 
     # ---------------------------------------------------------
 
@@ -35,6 +47,7 @@ class UserService:
 
     # ---------------------------------------------------------
 
+    @property
     def current_user(self):
 
         return self._current_user

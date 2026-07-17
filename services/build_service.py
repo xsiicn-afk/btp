@@ -7,6 +7,7 @@ from models.label_model import LabelModel
 from services.serial_number_generator import SerialNumberGenerator
 from services.article_service import ArticleService
 from services.build_history_service import BuildHistoryService
+from services.user_service import UserService
 
 
 class BuildService:
@@ -23,6 +24,8 @@ class BuildService:
         self.article_service = ArticleService()
 
         self.history = BuildHistoryService()
+
+        self.user_service = UserService()
 
     # ---------------------------------------------------------
 
@@ -102,11 +105,22 @@ class BuildService:
         )
 
         #
-        # Сохраняем сборку в журнал
+        # Временно сохраняем автора создания.
+        # В следующем этапе это поле будет
+        # записываться в базу данных.
+        #
+
+        label.created_by = self.user_service.current_user
+
+        #
+        # Сохраняем сборку
         #
 
         self.history.save(label)
-        print("CREATE RETURN:", label)
+
+        print(
+            f"CREATE: {label.serial} "
+            f"({self.user_service.current_user})"
+        )
+
         return label
-    
-        
