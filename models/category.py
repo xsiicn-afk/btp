@@ -10,4 +10,5 @@ class Category(Enum):
     GPU = "gpu"
     PSU = "psu"
     CASE = "case"
+    OS = "os"
     OTHER = "other"

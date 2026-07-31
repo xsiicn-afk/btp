@@ -3,12 +3,12 @@ from pathlib import Path
 import pythoncom
 import win32com.client
 
-from printing.address_writer import AddressWriter
-from printing.qr_writer import QrWriter
-from printing.specification_writer import SpecificationWriter
-
 
 class ExcelCom:
+    """
+    Тонкая обёртка над Microsoft Excel COM.
+    Отвечает только за работу с Excel.
+    """
 
     def __init__(self):
 
@@ -17,7 +17,10 @@ class ExcelCom:
 
     # ---------------------------------------------------------
 
-    def open(self, filename: str):
+    def open(
+        self,
+        filename: str,
+    ):
 
         pythoncom.CoInitialize()
 
@@ -29,7 +32,9 @@ class ExcelCom:
         self.excel.DisplayAlerts = False
 
         self.workbook = self.excel.Workbooks.Open(
-            str(Path(filename).resolve())
+            str(
+                Path(filename).resolve()
+            )
         )
 
     # ---------------------------------------------------------
@@ -39,26 +44,35 @@ class ExcelCom:
         try:
 
             if self.workbook is not None:
+
                 self.workbook.Close(False)
 
         finally:
 
             if self.excel is not None:
+
                 self.excel.Quit()
+
+            self.workbook = None
+            self.excel = None
 
             pythoncom.CoUninitialize()
 
     # ---------------------------------------------------------
 
-    def sheet(self, name: str):
+    def sheet(
+        self,
+        name: str,
+    ):
 
         return self.workbook.Worksheets(name)
-
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
 
     def specification_sheet(self):
 
-        sheet = self.sheet("Спецификация")
+        sheet = self.sheet(
+            "Спецификация"
+        )
 
         sheet.Activate()
 
@@ -66,141 +80,156 @@ class ExcelCom:
 
     # ---------------------------------------------------------
 
-    def save_as(self, filename: str):
+    def passport_sheet(self):
 
-        self.workbook.SaveAs(
-            str(Path(filename).resolve())
+        sheet = self.sheet(
+            "Паспорт"
         )
+
+        sheet.Activate()
+
+        return sheet
 
     # ---------------------------------------------------------
 
-    def prepare_for_print(
+    def sticker_sheet(self):
+
+        sheet = self.sheet(
+            "Адрес"
+        )
+
+        sheet.Activate()
+
+        return sheet
+
+    
+    # ---------------------------------------------------------
+
+    def save_as(
         self,
-        page_layout,
+        filename: str,
     ):
 
-        page = self.specification_sheet().PageSetup
+        self.workbook.SaveAs(
+            str(
+                Path(filename).resolve()
+            )
+        )
 
-        page.PrintArea = "$A$1:$BJ$52"
+    # ---------------------------------------------------------
+     
+    def prepare_for_print(
+        self,
+        sheet,
+        print_area: str | None = None,
+    ):
+        """
+        Подготавливает лист к печати.
+
+        Если указана область печати —
+        используется только она.
+        Иначе печатается весь лист.
+        """
+
+        page = sheet.PageSetup
+
+        if print_area:
+
+            page.PrintArea = print_area
+
+        else:
+
+            page.PrintArea = ""
 
         page.Zoom = False
-
         page.FitToPagesWide = 1
         page.FitToPagesTall = 1
-
-        page.Orientation = 2
 
         page.LeftMargin = 0
         page.RightMargin = 0
         page.TopMargin = 0
         page.BottomMargin = 0
+    
+    # ---------------------------------------------------------
+
+    def clear_range(
+        self,
+        sheet,
+        range_address: str,
+    ):
+        """
+        Полностью очищает диапазон
+        вместе с изображениями.
+        """
+
+        rng = sheet.Range(
+            range_address
+        )
+
+        for shape in list(sheet.Shapes):
+
+            try:
+
+                cell = shape.TopLeftCell
+
+                if (
+                    cell.Row >= rng.Row
+                    and cell.Row < rng.Row + rng.Rows.Count
+                    and cell.Column >= rng.Column
+                    and cell.Column < rng.Column + rng.Columns.Count
+                ):
+
+                    shape.Delete()
+
+            except Exception:
+
+                pass
+
+        rng.Clear()     
 
     # ---------------------------------------------------------
 
     def export_pdf(
         self,
-        label,
-        filename,
+        sheet,
+        filename: str,
+        print_area: str | None = None,
     ):
+        """
+        Экспортирует выбранный лист в PDF.
+
+        При необходимости ограничивает
+        область печати.
+        """
 
         self.prepare_for_print(
-            label.layout
+            sheet,
+            print_area,
         )
 
-        self.specification_sheet().ExportAsFixedFormat(
+        sheet.ExportAsFixedFormat(
             0,
-            str(Path(filename).resolve()),
+            str(
+                Path(filename).resolve()
+            ),
         )
-
     # ---------------------------------------------------------
 
     def print(
         self,
-        label,
+        sheet,
+        print_area: str | None = None,
     ):
+        """
+        Печатает выбранный лист.
+
+        Если указана область печати —
+        печатается только она.
+        """
 
         self.prepare_for_print(
-            label.layout
+            sheet,
+            print_area,
         )
 
-        self.specification_sheet().PrintOut()
-
-    # ---------------------------------------------------------
-
-    def write(
-        self,
-        sheet_name,
-        cell,
-        value,
-    ):
-
-        self.sheet(sheet_name).Range(
-            cell
-        ).Value = value
-
-    # ---------------------------------------------------------
-
-    def set_formula(
-        self,
-        sheet_name,
-        cell,
-        formula,
-    ):
-
-        self.sheet(sheet_name).Range(
-            cell
-        ).Formula = formula
-
-    # ---------------------------------------------------------
-
-    def write_specification(
-        self,
-        label,
-        block="TOP_LEFT",
-    ):
-
-        SpecificationWriter(
-            self.specification_sheet(),
-            block,
-        ).write(label)
-
-    # ---------------------------------------------------------
-
-    def write_addresses(
-        self,
-        label,
-    ):
-
-        AddressWriter(
-            self.specification_sheet()
-        ).write(label)
-
-    # ---------------------------------------------------------
-
-    def insert_serial_qr(
-        self,
-        filename,
-        block="TOP_LEFT",
-    ):
-
-        QrWriter(
-            self.specification_sheet(),
-            block,
-        ).serial(
-            filename
-        )
-
-    # ---------------------------------------------------------
-
-    def insert_article_qr(
-        self,
-        filename,
-        block="TOP_LEFT",
-    ):
-
-        QrWriter(
-            self.specification_sheet(),
-            block,
-        ).article(
-            filename
-        )
+        sheet.PrintOut()

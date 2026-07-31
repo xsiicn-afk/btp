@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import (
+    QDialog,
     QMainWindow,
     QMessageBox,
 )
@@ -7,6 +8,9 @@ from services.build_history_service import BuildHistoryService
 
 from ui.build_card_window import BuildCardWindow
 from ui.history_panel import HistoryPanel
+from ui.specification_print_dialog import (
+    SpecificationPrintDialog,
+)
 
 
 class HistoryWindow(QMainWindow):
@@ -23,15 +27,7 @@ class HistoryWindow(QMainWindow):
             750,
         )
 
-        #
-        # Сервисы
-        #
-
         self.history = BuildHistoryService()
-
-        #
-        # Интерфейс
-        #
 
         self.panel = HistoryPanel()
 
@@ -40,10 +36,6 @@ class HistoryWindow(QMainWindow):
         )
 
         self.viewer = BuildCardWindow()
-
-        #
-        # Сигналы
-        #
 
         self.panel.build_selected.connect(
             self.open_build
@@ -60,6 +52,7 @@ class HistoryWindow(QMainWindow):
         self.panel.sticker_requested.connect(
             self.print_stickers
         )
+
     # ---------------------------------------------------------
 
     def refresh(self):
@@ -92,9 +85,7 @@ class HistoryWindow(QMainWindow):
         )
 
         self.viewer.show()
-
         self.viewer.raise_()
-
         self.viewer.activateWindow()
 
     # ---------------------------------------------------------
@@ -104,25 +95,68 @@ class HistoryWindow(QMainWindow):
         serials: list[str],
     ):
 
-        printed = 0
+        if not serials:
 
-        for serial in serials:
+            return
 
-            if self.history.print_specification(
-                serial
-            ):
-
-                printed += 1
-
-        self.panel.mark_specification_printed(
-            serials
-        )
-
-        QMessageBox.information(
+        dialog = SpecificationPrintDialog(
+            len(serials),
             self,
-            "Печать",
-            f"Распечатано спецификаций: {printed}",
         )
+
+        if (
+            dialog.exec()
+            != QDialog.DialogCode.Accepted
+        ):
+
+            return
+
+        try:
+
+            result = (
+                self.history.print_specifications(
+                    serials,
+                    dialog.first_position(),
+                )
+            )
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Ошибка печати",
+                (
+                    "Не удалось распечатать "
+                    "спецификацию.\n\n"
+                    f"{error}"
+                ),
+            )
+
+            return
+
+        if result:
+
+            self.panel.mark_specification_printed(
+                serials
+            )
+
+            QMessageBox.information(
+                self,
+                "Печать",
+                (
+                    "Распечатано спецификаций: "
+                    f"{len(serials)}"
+                ),
+            )
+
+        else:
+
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Не удалось выполнить печать.",
+            )
+
     # ---------------------------------------------------------
 
     def print_passports(
@@ -130,24 +164,49 @@ class HistoryWindow(QMainWindow):
         serials: list[str],
     ):
 
+        if not serials:
+
+            return
+
         printed = 0
 
-        for serial in serials:
+        try:
 
-            if self.history.print_passport(
-                serial
-            ):
+            for serial in serials:
 
-                printed += 1
+                if self.history.print_passport(
+                    serial
+                ):
 
-        self.panel.mark_passport_printed(
-            serials
-        )
+                    printed += 1
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Ошибка печати",
+                (
+                    "Не удалось распечатать "
+                    "паспорт.\n\n"
+                    f"{error}"
+                ),
+            )
+
+            return
+
+        if printed:
+
+            self.panel.mark_passport_printed(
+                serials
+            )
 
         QMessageBox.information(
             self,
             "Печать",
-            f"Распечатано паспортов: {printed}",
+            (
+                "Распечатано паспортов: "
+                f"{printed}"
+            ),
         )
 
     # ---------------------------------------------------------
@@ -157,32 +216,62 @@ class HistoryWindow(QMainWindow):
         serials: list[str],
     ):
 
-        printed = 0
+        if not serials:
 
-        for serial in serials:
+            return
 
-            if self.history.print_sticker(
-                serial
-            ):
+        printed_serials = []
 
-                printed += 1
+        try:
 
-        self.panel.mark_sticker_printed(
-            serials
-        )
+            for serial in serials:
+
+                if self.history.print_sticker(
+                    serial
+                ):
+
+                    printed_serials.append(
+                        serial
+                    )
+
+        except Exception as error:
+
+            if printed_serials:
+
+                self.panel.mark_sticker_printed(
+                    printed_serials
+                )
+
+            QMessageBox.critical(
+                self,
+                "Ошибка печати наклейки",
+                (
+                    "Не удалось распечатать "
+                    "наклейку.\n\n"
+                    f"{error}"
+                ),
+            )
+
+            return
+
+        if printed_serials:
+
+            self.panel.mark_sticker_printed(
+                printed_serials
+            )
 
         QMessageBox.information(
             self,
             "Печать",
-            f"Распечатано наклеек: {printed}",
+            (
+                "Распечатано наклеек: "
+                f"{len(printed_serials)}"
+            ),
         )
+
     # ---------------------------------------------------------
 
     def update(self):
-
-        """
-        Обновить список изделий.
-        """
 
         self.refresh()
 
@@ -209,6 +298,13 @@ class HistoryWindow(QMainWindow):
         if self.viewer.isVisible():
 
             self.viewer.close()
+
+        try:
+
+            self.history.close()
+
+        except Exception:
+            pass
 
         super().closeEvent(
             event

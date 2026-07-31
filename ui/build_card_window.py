@@ -5,8 +5,6 @@ from PySide6.QtWidgets import (
 
 from models.label_model import LabelModel
 
-from printing.print_engine import PrintEngine
-
 from services.build_history_service import (
     BuildHistoryService,
 )
@@ -15,6 +13,12 @@ from ui.build_card import BuildCard
 
 
 class BuildCardWindow(QMainWindow):
+    """
+    Окно просмотра карточки изделия.
+
+    Изменять можно только серийные номера
+    комплектующих двойным щелчком по S/N.
+    """
 
     def __init__(self):
 
@@ -25,27 +29,23 @@ class BuildCardWindow(QMainWindow):
         )
 
         self.resize(
-            850,
-            900,
+            1000,
+            750,
         )
-
-        #
-        # Модель
-        #
 
         self.label: LabelModel | None = None
 
-        #
-        # Сервисы
-        #
+        # =================================================
+        # Сервис истории
+        # =================================================
 
-        self.history = BuildHistoryService()
+        self.history_service = (
+            BuildHistoryService()
+        )
 
-        self.print_engine = PrintEngine()
-
-        #
-        # Интерфейс
-        #
+        # =================================================
+        # Карточка
+        # =================================================
 
         self.card = BuildCard()
 
@@ -53,24 +53,12 @@ class BuildCardWindow(QMainWindow):
             self.card
         )
 
-        #
-        # Сигналы
-        #
+        # -------------------------------------------------
+        # Сохранение изменённого S/N
+        # -------------------------------------------------
 
-        self.card.save_requested.connect(
-            self.save
-        )
-
-        self.card.specification_requested.connect(
-            self.print_specification
-        )
-
-        self.card.passport_requested.connect(
-            self.print_passport
-        )
-
-        self.card.sticker_requested.connect(
-            self.print_sticker
+        self.card.serial_number_changed.connect(
+            self.update_serial_number
         )
 
     # ---------------------------------------------------------
@@ -86,11 +74,52 @@ class BuildCardWindow(QMainWindow):
             label
         )
 
-        self.card.set_print_enabled(
-            True
-        )
-
         self.update_title()
+
+    # ---------------------------------------------------------
+
+    def update_serial_number(
+        self,
+        item_id: int,
+        serial_number: str,
+    ):
+        """
+        Сохраняет изменённый серийный номер
+        комплектующего непосредственно в БД.
+        """
+
+        try:
+
+            success = (
+                self.history_service
+                .update_item_serial(
+                    item_id,
+                    serial_number,
+                )
+            )
+
+            if not success:
+
+                QMessageBox.warning(
+                    self,
+                    "Серийный номер",
+                    (
+                        "Не удалось найти "
+                        "комплектующее в базе."
+                    ),
+                )
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                (
+                    "Не удалось сохранить "
+                    "серийный номер.\n\n"
+                    f"{error}"
+                ),
+            )
 
     # ---------------------------------------------------------
 
@@ -106,15 +135,27 @@ class BuildCardWindow(QMainWindow):
 
             return
 
-        title = self.label.title
-
-        if not title:
-
-            title = self.label.internal_name
-
-        self.setWindowTitle(
-            f"{self.label.serial} — {title}"
+        serial = (
+            self.label.serial
+            or ""
         )
+
+        model_name = (
+            self.label.model_name
+            or "Системный блок"
+        )
+
+        if serial:
+
+            self.setWindowTitle(
+                f"{serial} — {model_name}"
+            )
+
+        else:
+
+            self.setWindowTitle(
+                model_name
+            )
 
     # ---------------------------------------------------------
 
@@ -127,139 +168,7 @@ class BuildCardWindow(QMainWindow):
         self.card.clear()
 
         self.update_title()
-    # ---------------------------------------------------------
 
-    def save(
-        self,
-    ):
-
-        if self.label is None:
-
-            return
-
-        try:
-
-            #
-            # Пока сохраняем только новые изделия.
-            # Полноценное редактирование с увеличением
-            # версии добавим следующим этапом.
-            #
-
-            exists = self.history.load_label(
-                self.label.serial
-            )
-
-            if exists is None:
-
-                self.history.save(
-                    self.label
-                )
-
-            QMessageBox.information(
-                self,
-                "Сохранено",
-                "Изделие успешно сохранено."
-            )
-
-        except Exception as error:
-
-            QMessageBox.critical(
-                self,
-                "Ошибка",
-                str(error)
-            )
-
-    # ---------------------------------------------------------
-
-    def print_specification(
-        self,
-    ):
-
-        if self.label is None:
-
-            return
-
-        self.print_engine.print_to_printer(
-            self.label
-        )
-
-        self.history.print_specification(
-            self.label.serial
-        )
-
-        self.card.set_specification_printed(
-            True
-        )
-
-        QMessageBox.information(
-            self,
-            "Печать",
-            "Спецификация отправлена на печать."
-        )
-
-    # ---------------------------------------------------------
-
-    def print_passport(
-        self,
-    ):
-
-        if self.label is None:
-
-            return
-
-        #
-        # Пока используется тот же PrintEngine.
-        #
-
-        self.print_engine.print_to_printer(
-            self.label
-        )
-
-        self.history.print_passport(
-            self.label.serial
-        )
-
-        self.card.set_passport_printed(
-            True
-        )
-
-        QMessageBox.information(
-            self,
-            "Печать",
-            "Паспорт отправлен на печать."
-        )
-
-    # ---------------------------------------------------------
-
-    def print_sticker(
-        self,
-    ):
-
-        if self.label is None:
-
-            return
-
-        #
-        # Пока используется тот же PrintEngine.
-        #
-
-        self.print_engine.print_to_printer(
-            self.label
-        )
-
-        self.history.print_sticker(
-            self.label.serial
-        )
-
-        self.card.set_sticker_printed(
-            True
-        )
-
-        QMessageBox.information(
-            self,
-            "Печать",
-            "Стикер отправлен на печать."
-        )
     # ---------------------------------------------------------
 
     def current_label(
@@ -274,7 +183,9 @@ class BuildCardWindow(QMainWindow):
         self,
     ) -> bool:
 
-        return self.label is not None
+        return (
+            self.label is not None
+        )
 
     # ---------------------------------------------------------
 
@@ -291,34 +202,6 @@ class BuildCardWindow(QMainWindow):
         )
 
         self.update_title()
-
-    # ---------------------------------------------------------
-
-    def show_message(
-        self,
-        title: str,
-        text: str,
-    ):
-
-        QMessageBox.information(
-            self,
-            title,
-            text,
-        )
-
-    # ---------------------------------------------------------
-
-    def show_error(
-        self,
-        title: str,
-        text: str,
-    ):
-
-        QMessageBox.critical(
-            self,
-            title,
-            text,
-        )
 
     # ---------------------------------------------------------
 

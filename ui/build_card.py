@@ -1,199 +1,374 @@
-from PySide6.QtCore import Signal
+from PySide6.QtCore import (
+    Qt,
+    Signal,
+)
+
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
-    QPushButton,
     QFrame,
     QVBoxLayout,
-    QHBoxLayout,
     QGridLayout,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
 )
 
 from models.label_model import LabelModel
 
 
 class BuildCard(QWidget):
+    """
+    Карточка созданного изделия.
 
-    save_requested = Signal()
-    specification_requested = Signal()
-    passport_requested = Signal()
-    sticker_requested = Signal()
+    Основной режим — просмотр.
+
+    Серийный номер комплектующего можно
+    изменить двойным щелчком по колонке S/N.
+    """
+
+    # item_id, новый S/N
+    serial_number_changed = Signal(
+        int,
+        str,
+    )
+
+    SERIAL_COLUMN = 3
 
     def __init__(self):
         super().__init__()
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        self.current_label_data = None
 
-        #
+        # Не даёт itemChanged срабатывать,
+        # пока таблица программно заполняется.
+        self._loading = False
+
+        root = QVBoxLayout(
+            self
+        )
+
+        root.setContentsMargins(
+            12,
+            12,
+            12,
+            12,
+        )
+
+        root.setSpacing(
+            10
+        )
+
+        # =====================================================
         # Заголовок
-        #
+        # =====================================================
 
-        self.title = QLabel()
+        self.title = QLabel(
+            "Карточка изделия"
+        )
+
         self.title.setStyleSheet(
             "font-size:18px;font-weight:bold;"
         )
 
+        root.addWidget(
+            self.title
+        )
+
         self.model = QLabel()
-        self.model.setWordWrap(True)
 
-        root.addWidget(self.title)
-        root.addWidget(self.model)
+        self.model.setWordWrap(
+            True
+        )
 
-        #
+        self.model.setStyleSheet(
+            "font-size:15px;font-weight:bold;"
+        )
+
+        root.addWidget(
+            self.model
+        )
+
+        # =====================================================
         # Общая информация
-        #
+        # =====================================================
 
         info_frame = QFrame()
-        info_frame.setFrameShape(QFrame.Box)
 
-        info_layout = QGridLayout(info_frame)
+        info_frame.setFrameShape(
+            QFrame.Box
+        )
+
+        info_layout = QGridLayout(
+            info_frame
+        )
+
+        info_layout.setColumnStretch(
+            1,
+            1,
+        )
 
         self.serial = QLabel()
-
         self.article = QLabel()
-
         self.date = QLabel()
-
+        self.operating_system = QLabel()
+        self.warranty = QLabel()
         self.created_by = QLabel()
-
         self.version = QLabel()
 
-        info_layout.addWidget(QLabel("Серийный номер"), 0, 0)
-        info_layout.addWidget(self.serial, 0, 1)
+        fields = (
+            (
+                "Серийный номер",
+                self.serial,
+            ),
+            (
+                "Артикул",
+                self.article,
+            ),
+            (
+                "Дата производства",
+                self.date,
+            ),
+            (
+                "Операционная система",
+                self.operating_system,
+            ),
+            (
+                "Гарантия",
+                self.warranty,
+            ),
+            (
+                "Создал",
+                self.created_by,
+            ),
+            (
+                "Версия",
+                self.version,
+            ),
+        )
 
-        info_layout.addWidget(QLabel("Артикул"), 1, 0)
-        info_layout.addWidget(self.article, 1, 1)
+        for row, (
+            caption,
+            widget,
+        ) in enumerate(fields):
 
-        info_layout.addWidget(QLabel("Дата"), 2, 0)
-        info_layout.addWidget(self.date, 2, 1)
+            caption_widget = QLabel(
+                caption
+            )
 
-        info_layout.addWidget(QLabel("Создал"), 3, 0)
-        info_layout.addWidget(self.created_by, 3, 1)
+            caption_widget.setStyleSheet(
+                "font-weight:bold;"
+            )
 
-        info_layout.addWidget(QLabel("Версия"), 4, 0)
-        info_layout.addWidget(self.version, 4, 1)
+            info_layout.addWidget(
+                caption_widget,
+                row,
+                0,
+            )
 
-        root.addWidget(info_frame)
+            info_layout.addWidget(
+                widget,
+                row,
+                1,
+            )
 
+        root.addWidget(
+            info_frame
+        )
+
+        # =====================================================
+        # Полный состав
+        # =====================================================
+
+        items_frame = QFrame()
+
+        items_frame.setFrameShape(
+            QFrame.Box
+        )
+
+        items_layout = QVBoxLayout(
+            items_frame
+        )
+
+        items_title = QLabel(
+            "Комплектующие и серийные номера"
+        )
+
+        items_title.setStyleSheet(
+            "font-weight:bold;"
+        )
+
+        items_layout.addWidget(
+            items_title
+        )
+
+        self.items_table = QTableWidget()
+
+        self.items_table.setColumnCount(
+            4
+        )
+
+        self.items_table.setHorizontalHeaderLabels(
+            [
+                "Категория",
+                "Наименование",
+                "Кол-во",
+                "Серийный номер",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Редактор сам по себе не запускается.
         #
-        # Комплектующие
-        #
+        # Мы запускаем его вручную только после
+        # двойного щелчка по S/N.
+        # -------------------------------------------------
 
-        self.cpu = QLabel()
-        self.board = QLabel()
-        self.cooler = QLabel()
-        self.ram = QLabel()
-        self.storage = QLabel()
-        self.gpu = QLabel()
-        self.case = QLabel()
-        self.psu = QLabel()
+        self.items_table.setEditTriggers(
+            QAbstractItemView.NoEditTriggers
+        )
 
-        self.component_widgets = [
-            ("Процессор", self.cpu),
-            ("Материнская плата", self.board),
-            ("Охлаждение", self.cooler),
-            ("Оперативная память", self.ram),
-            ("Накопители", self.storage),
-            ("Видеоадаптер", self.gpu),
-            ("Корпус", self.case),
-            ("Блок питания", self.psu),
-        ]
+        self.items_table.setSelectionBehavior(
+            QAbstractItemView.SelectItems
+        )
 
-        for title, widget in self.component_widgets:
+        self.items_table.verticalHeader().setVisible(
+            False
+        )
 
-            frame = QFrame()
-            frame.setFrameShape(QFrame.Box)
+        header = (
+            self.items_table
+            .horizontalHeader()
+        )
 
-            layout = QVBoxLayout(frame)
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeToContents,
+        )
 
-            caption = QLabel(title)
-            caption.setStyleSheet("font-weight:bold;")
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.Stretch,
+        )
 
-            widget.setWordWrap(True)
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeToContents,
+        )
 
-            layout.addWidget(caption)
-            layout.addWidget(widget)
+        header.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeToContents,
+        )
 
-            root.addWidget(frame)
-        #
+        self.items_table.setMinimumHeight(
+            260
+        )
+
+        # -------------------------------------------------
+        # Редактирование S/N
+        # -------------------------------------------------
+
+        self.items_table.itemDoubleClicked.connect(
+            self._item_double_clicked
+        )
+
+        self.items_table.itemChanged.connect(
+            self._item_changed
+        )
+
+        items_layout.addWidget(
+            self.items_table
+        )
+
+        root.addWidget(
+            items_frame,
+            1,
+        )
+
+        # =====================================================
         # Статус
-        #
+        # =====================================================
 
         status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.Box)
 
-        status_layout = QVBoxLayout(status_frame)
-
-        title = QLabel("Статус изделия")
-        title.setStyleSheet("font-weight:bold;")
-
-        status_layout.addWidget(title)
-
-        self.status = QLabel("Создано")
-
-        self.specification_status = QLabel("Спецификация: не печаталась")
-        self.passport_status = QLabel("Паспорт: не печатался")
-        self.sticker_status = QLabel("Стикер: не печатался")
-
-        status_layout.addWidget(self.status)
-        status_layout.addWidget(self.specification_status)
-        status_layout.addWidget(self.passport_status)
-        status_layout.addWidget(self.sticker_status)
-
-        root.addWidget(status_frame)
-
-        root.addStretch()
-
-        #
-        # Кнопки
-        #
-
-        buttons = QHBoxLayout()
-
-        self.save_button = QPushButton(
-            "Сохранить"
+        status_frame.setFrameShape(
+            QFrame.Box
         )
 
-        self.specification_button = QPushButton(
-            "Печать спецификации"
+        status_layout = QGridLayout(
+            status_frame
         )
 
-        self.passport_button = QPushButton(
-            "Печать паспорта"
+        status_title = QLabel(
+            "Статус"
         )
 
-        self.sticker_button = QPushButton(
-            "Печать стикера"
+        status_title.setStyleSheet(
+            "font-weight:bold;"
         )
 
-        buttons.addWidget(self.save_button)
-        buttons.addWidget(self.specification_button)
-        buttons.addWidget(self.passport_button)
-        buttons.addWidget(self.sticker_button)
-
-        root.addLayout(buttons)
-
-        #
-        # Сигналы
-        #
-
-        self.save_button.clicked.connect(
-            self.save_requested.emit
+        status_layout.addWidget(
+            status_title,
+            0,
+            0,
         )
 
-        self.specification_button.clicked.connect(
-            self.specification_requested.emit
+        self.status = QLabel(
+            "Создано"
         )
 
-        self.passport_button.clicked.connect(
-            self.passport_requested.emit
+        status_layout.addWidget(
+            self.status,
+            0,
+            1,
         )
 
-        self.sticker_button.clicked.connect(
-            self.sticker_requested.emit
+        self.specification_status = QLabel()
+        self.passport_status = QLabel()
+        self.sticker_status = QLabel()
+
+        status_layout.addWidget(
+            QLabel("Спецификация"),
+            1,
+            0,
         )
+
+        status_layout.addWidget(
+            self.specification_status,
+            1,
+            1,
+        )
+
+        status_layout.addWidget(
+            QLabel("Паспорт"),
+            2,
+            0,
+        )
+
+        status_layout.addWidget(
+            self.passport_status,
+            2,
+            1,
+        )
+
+        status_layout.addWidget(
+            QLabel("Стикер"),
+            3,
+            0,
+        )
+
+        status_layout.addWidget(
+            self.sticker_status,
+            3,
+            1,
+        )
+
+        root.addWidget(
+            status_frame
+        )
+
     # ---------------------------------------------------------
 
     def set_label(
@@ -201,147 +376,350 @@ class BuildCard(QWidget):
         label: LabelModel,
     ):
 
-        #
-        # Заголовок
-        #
+        self.current_label_data = label
 
-        self.title.setText(
-            label.title or ""
-        )
+        self._loading = True
 
-        self.model.setText(
-            label.model_name or ""
-        )
+        try:
 
-        #
-        # Общая информация
-        #
+            self.model.setText(
+                label.model_name
+                or "—"
+            )
 
-        self.serial.setText(
-            label.serial or "—"
-        )
+            self.serial.setText(
+                label.serial
+                or "—"
+            )
 
-        self.article.setText(
-            str(label.article_code or "")
-        )
-
-        self.date.setText(
-            label.date or "—"
-        )
-
-        self.created_by.setText(
-            getattr(
-                label,
-                "created_by",
-                ""
-            ) or "—"
-        )
-
-        self.version.setText(
-            str(
-                getattr(
-                    label,
-                    "version",
-                    1,
+            self.article.setText(
+                str(
+                    getattr(
+                        label,
+                        "article_code",
+                        "",
+                    )
+                    or "—"
                 )
             )
-        )
 
-        #
-        # Комплектующие
-        #
+            self.date.setText(
+                label.date
+                or "—"
+            )
 
-        self.cpu.setText(
-            label.cpu or "—"
-        )
+            self.operating_system.setText(
+                label.operating_system
+                or "—"
+            )
 
-        self.board.setText(
-            label.motherboard or "—"
-        )
-
-        self.cooler.setText(
-            label.cooler or "—"
-        )
-
-        self.ram.setText(
-            label.ram or "—"
-        )
-
-        self.storage.setText(
-            label.storage or "—"
-        )
-
-        self.gpu.setText(
-            label.gpu or "—"
-        )
-
-        self.case.setText(
-            label.case or "—"
-        )
-
-        self.psu.setText(
-            label.psu or "—"
-        )
-
-        #
-        # Статус
-        #
-
-        self.status.setText(
-            getattr(
+            warranty_months = getattr(
                 label,
-                "status",
-                "Создано",
+                "warranty_months",
+                36,
             )
+
+            self.warranty.setText(
+                f"{warranty_months} мес."
+            )
+
+            self.created_by.setText(
+                getattr(
+                    label,
+                    "created_by",
+                    "",
+                )
+                or "—"
+            )
+
+            self.version.setText(
+                str(
+                    getattr(
+                        label,
+                        "version",
+                        1,
+                    )
+                    or 1
+                )
+            )
+
+            # =================================================
+            # Комплектующие
+            # =================================================
+
+            items = getattr(
+                label,
+                "items",
+                [],
+            )
+
+            self.items_table.setRowCount(
+                len(items)
+            )
+
+            for row, item in enumerate(
+                items
+            ):
+
+                category = getattr(
+                    item.category,
+                    "value",
+                    str(item.category),
+                )
+
+                # -----------------------------------------
+                # Категория
+                # -----------------------------------------
+
+                category_item = (
+                    QTableWidgetItem(
+                        str(category)
+                    )
+                )
+
+                category_item.setFlags(
+                    category_item.flags()
+                    & ~Qt.ItemIsEditable
+                )
+
+                self.items_table.setItem(
+                    row,
+                    0,
+                    category_item,
+                )
+
+                # -----------------------------------------
+                # Наименование
+                # -----------------------------------------
+
+                name_item = QTableWidgetItem(
+                    item.name
+                    or ""
+                )
+
+                name_item.setFlags(
+                    name_item.flags()
+                    & ~Qt.ItemIsEditable
+                )
+
+                self.items_table.setItem(
+                    row,
+                    1,
+                    name_item,
+                )
+
+                # -----------------------------------------
+                # Количество
+                # -----------------------------------------
+
+                quantity_item = (
+                    QTableWidgetItem(
+                        str(
+                            item.quantity
+                        )
+                    )
+                )
+
+                quantity_item.setFlags(
+                    quantity_item.flags()
+                    & ~Qt.ItemIsEditable
+                )
+
+                self.items_table.setItem(
+                    row,
+                    2,
+                    quantity_item,
+                )
+
+                # -----------------------------------------
+                # Серийный номер
+                # -----------------------------------------
+
+                serial_item = (
+                    QTableWidgetItem(
+                        item.serial_number
+                        or ""
+                    )
+                )
+
+                # ID строки build_items храним
+                # прямо в ячейке.
+                db_id = getattr(
+                    item,
+                    "db_id",
+                    None,
+                )
+
+                if db_id is not None:
+
+                    serial_item.setData(
+                        Qt.UserRole,
+                        int(db_id),
+                    )
+
+                self.items_table.setItem(
+                    row,
+                    self.SERIAL_COLUMN,
+                    serial_item,
+                )
+
+            self.items_table.resizeRowsToContents()
+
+            # =================================================
+            # Статус
+            # =================================================
+
+            self.status.setText(
+                getattr(
+                    label,
+                    "status",
+                    "Создано",
+                )
+                or "Создано"
+            )
+
+            self.set_specification_printed(
+                bool(
+                    getattr(
+                        label,
+                        "spec_printed",
+                        False,
+                    )
+                )
+            )
+
+            self.set_passport_printed(
+                bool(
+                    getattr(
+                        label,
+                        "passport_printed",
+                        False,
+                    )
+                )
+            )
+
+            self.set_sticker_printed(
+                bool(
+                    getattr(
+                        label,
+                        "sticker_printed",
+                        False,
+                    )
+                )
+            )
+
+        finally:
+
+            self._loading = False
+
+    # ---------------------------------------------------------
+
+    def _item_double_clicked(
+        self,
+        item: QTableWidgetItem,
+    ):
+        """
+        Разрешаем редактирование исключительно
+        ячейки серийного номера.
+        """
+
+        if (
+            item.column()
+            != self.SERIAL_COLUMN
+        ):
+
+            return
+
+        if (
+            item.data(Qt.UserRole)
+            is None
+        ):
+
+            return
+
+        self.items_table.editItem(
+            item
         )
 
-        if getattr(
-            label,
-            "spec_printed",
-            False,
+    # ---------------------------------------------------------
+
+    def _item_changed(
+        self,
+        item: QTableWidgetItem,
+    ):
+        """
+        После завершения редактирования
+        сообщает BuildCardWindow новый S/N.
+        """
+
+        if self._loading:
+
+            return
+
+        if (
+            item.column()
+            != self.SERIAL_COLUMN
         ):
 
-            self.specification_status.setText(
-                "Спецификация: напечатана"
-            )
+            return
 
-        else:
+        item_id = item.data(
+            Qt.UserRole
+        )
 
-            self.specification_status.setText(
-                "Спецификация: не печаталась"
-            )
+        if item_id is None:
 
-        if getattr(
-            label,
-            "passport_printed",
-            False,
-        ):
+            return
 
-            self.passport_status.setText(
-                "Паспорт: напечатан"
-            )
+        new_serial = (
+            item.text()
+            or ""
+        ).strip()
 
-        else:
+        # Нормализуем пробелы по краям.
 
-            self.passport_status.setText(
-                "Паспорт: не печатался"
-            )
+        if item.text() != new_serial:
 
-        if getattr(
-            label,
-            "sticker_printed",
-            False,
-        ):
+            self._loading = True
 
-            self.sticker_status.setText(
-                "Стикер: напечатан"
-            )
+            try:
 
-        else:
+                item.setText(
+                    new_serial
+                )
 
-            self.sticker_status.setText(
-                "Стикер: не печатался"
-            )
+            finally:
+
+                self._loading = False
+
+        # ---------------------------------------------
+        # Обновляем LabelModel в памяти.
+        # ---------------------------------------------
+
+        if self.current_label_data:
+
+            row = item.row()
+
+            if (
+                0 <= row
+                < len(
+                    self.current_label_data.items
+                )
+            ):
+
+                self.current_label_data.items[
+                    row
+                ].serial_number = new_serial
+
+        # ---------------------------------------------
+        # Просим окно сохранить изменение.
+        # ---------------------------------------------
+
+        self.serial_number_changed.emit(
+            int(item_id),
+            new_serial,
+        )
+
     # ---------------------------------------------------------
 
     def set_status(
@@ -349,7 +727,9 @@ class BuildCard(QWidget):
         text: str,
     ):
 
-        self.status.setText(text)
+        self.status.setText(
+            text
+        )
 
     # ---------------------------------------------------------
 
@@ -358,17 +738,11 @@ class BuildCard(QWidget):
         printed: bool,
     ):
 
-        if printed:
-
-            self.specification_status.setText(
-                "Спецификация: напечатана"
-            )
-
-        else:
-
-            self.specification_status.setText(
-                "Спецификация: не печаталась"
-            )
+        self.specification_status.setText(
+            "Напечатана"
+            if printed
+            else "Не печаталась"
+        )
 
     # ---------------------------------------------------------
 
@@ -377,17 +751,11 @@ class BuildCard(QWidget):
         printed: bool,
     ):
 
-        if printed:
-
-            self.passport_status.setText(
-                "Паспорт: напечатан"
-            )
-
-        else:
-
-            self.passport_status.setText(
-                "Паспорт: не печатался"
-            )
+        self.passport_status.setText(
+            "Напечатан"
+            if printed
+            else "Не печатался"
+        )
 
     # ---------------------------------------------------------
 
@@ -396,49 +764,33 @@ class BuildCard(QWidget):
         printed: bool,
     ):
 
-        if printed:
-
-            self.sticker_status.setText(
-                "Стикер: напечатан"
-            )
-
-        else:
-
-            self.sticker_status.setText(
-                "Стикер: не печатался"
-            )
+        self.sticker_status.setText(
+            "Напечатан"
+            if printed
+            else "Не печатался"
+        )
 
     # ---------------------------------------------------------
 
     def lock(self):
-
-        self.save_button.setEnabled(False)
-
-    # ---------------------------------------------------------
+        pass
 
     def unlock(self):
-
-        self.save_button.setEnabled(True)
-
-    # ---------------------------------------------------------
+        pass
 
     def set_print_enabled(
         self,
         enabled: bool,
     ):
+        pass
 
-        self.specification_button.setEnabled(enabled)
-
-        self.passport_button.setEnabled(enabled)
-
-        self.sticker_button.setEnabled(enabled)
     # ---------------------------------------------------------
 
     def clear(self):
 
-        empty = LabelModel()
-
-        self.set_label(empty)
+        self.set_label(
+            LabelModel()
+        )
 
     # ---------------------------------------------------------
 
@@ -456,7 +808,7 @@ class BuildCard(QWidget):
 
     def current_title(self) -> str:
 
-        return self.title.text()
+        return self.model.text()
 
     # ---------------------------------------------------------
 
@@ -483,7 +835,8 @@ class BuildCard(QWidget):
     ):
 
         self.created_by.setText(
-            creator or "—"
+            creator
+            or "—"
         )
 
     # ---------------------------------------------------------
@@ -494,69 +847,6 @@ class BuildCard(QWidget):
     ):
 
         self.date.setText(
-            date or "—"
+            date
+            or "—"
         )
-    # ---------------------------------------------------------
-
-    def clear(self):
-
-        empty = LabelModel()
-
-        self.set_label(empty)
-
-    # ---------------------------------------------------------
-
-    def current_serial(self) -> str:
-
-        return self.serial.text()
-
-    # ---------------------------------------------------------
-
-    def current_article(self) -> str:
-
-        return self.article.text()
-
-    # ---------------------------------------------------------
-
-    def current_title(self) -> str:
-
-        return self.title.text()
-
-    # ---------------------------------------------------------
-
-    def current_model(self) -> str:
-
-        return self.model.text()
-
-    # ---------------------------------------------------------
-
-    def update_version(
-        self,
-        version: int,
-    ):
-
-        self.version.setText(
-            str(version)
-        )
-
-    # ---------------------------------------------------------
-
-    def update_creator(
-        self,
-        creator: str,
-    ):
-
-        self.created_by.setText(
-            creator or "—"
-        )
-
-    # ---------------------------------------------------------
-
-    def update_date(
-        self,
-        date: str,
-    ):
-
-        self.date.setText(
-            date or "—"
-        )            

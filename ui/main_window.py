@@ -1,13 +1,17 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+
 from PySide6.QtWidgets import (
-    QApplication,
     QFileDialog,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
+    QSpinBox,
     QSplitter,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -22,9 +26,7 @@ from services.build_service import BuildService
 
 from ui.clipboard_panel import ClipboardPanel
 from ui.components_table import ComponentsTable
-from ui.preview_panel import PreviewPanel
 from ui.toolbar import MainToolBar
-from ui.print_dialog import PrintDialog
 from ui.settings_dialog import SettingsDialog
 from ui.history_window import HistoryWindow
 
@@ -34,9 +36,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        #
+        # -------------------------------------------------
         # Сервисы
-        #
+        # -------------------------------------------------
 
         self.parser = BasicParser()
 
@@ -44,31 +46,37 @@ class MainWindow(QMainWindow):
 
         self.print_engine = PrintEngine()
 
-        #
+        # -------------------------------------------------
         # Данные
-        #
+        # -------------------------------------------------
 
-        self.current_configuration = Configuration()
+        self.current_configuration = (
+            Configuration()
+        )
 
-        self.current_label = LabelModel()
+        self.current_label = (
+            LabelModel()
+        )
 
-        #
+        # -------------------------------------------------
         # Дополнительные окна
-        #
+        # -------------------------------------------------
 
-        self.history_window = HistoryWindow()
+        self.history_window = (
+            HistoryWindow()
+        )
 
-        #
-        # Окно
-        #
+        # -------------------------------------------------
+        # Главное окно
+        # -------------------------------------------------
 
         self.setWindowTitle(
             "ByTop Production Suite"
         )
 
         self.resize(
-            1600,
-            900,
+            1700,
+            950,
         )
 
         self.init_ui()
@@ -77,19 +85,13 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
 
-        self.toolbar = MainToolBar()
-
-        self.setMenuWidget(
-            self.toolbar
-        )
-
         central = QWidget()
 
         self.setCentralWidget(
             central
         )
 
-        layout = QHBoxLayout(
+        root_layout = QHBoxLayout(
             central
         )
 
@@ -97,23 +99,216 @@ class MainWindow(QMainWindow):
             Qt.Horizontal
         )
 
-        self.clipboard_panel = ClipboardPanel()
+        # =================================================
+        # Левая панель
+        # =================================================
 
-        self.components_table = ComponentsTable()
+        left = QWidget()
 
-        self.preview_panel = PreviewPanel()
+        left_layout = QVBoxLayout(
+            left
+        )
 
-        splitter.addWidget(
-            self.clipboard_panel
+        left_layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        left_layout.setSpacing(
+            8
+        )
+
+        # -------------------------------------------------
+        # Кнопки
+        #
+        # Теперь toolbar является частью левой панели,
+        # а не отдельной строкой над всем окном.
+        # -------------------------------------------------
+
+        self.toolbar = MainToolBar()
+
+        left_layout.addWidget(
+            self.toolbar
+        )
+
+        # -------------------------------------------------
+        # Исходный текст из 1С
+        # -------------------------------------------------
+
+        self.clipboard_panel = (
+            ClipboardPanel()
+        )
+
+        left_layout.addWidget(
+            self.clipboard_panel,
+            1,
         )
 
         splitter.addWidget(
-            self.components_table
+            left
         )
 
-        splitter.addWidget(
-            self.preview_panel
+        # =================================================
+        # Правая панель
+        # =================================================
+
+        right = QWidget()
+
+        right_layout = QVBoxLayout(
+            right
         )
+
+        right_layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        # -------------------------------------------------
+        # Комплектующие
+        # -------------------------------------------------
+
+        self.components_table = (
+            ComponentsTable()
+        )
+
+        right_layout.addWidget(
+            self.components_table,
+            1,
+        )
+
+        # -------------------------------------------------
+        # Название модели
+        # -------------------------------------------------
+
+        self.model_name_title = QLabel(
+            "Наименование модели:"
+        )
+
+        self.model_name_title.setStyleSheet(
+            """
+            QLabel {
+                font-weight: bold;
+                font-size: 14px;
+                margin-top: 8px;
+            }
+            """
+        )
+
+        right_layout.addWidget(
+            self.model_name_title
+        )
+
+        self.model_name_preview = (
+            QPlainTextEdit()
+        )
+
+        # Название можно исправлять вручную.
+
+        self.model_name_preview.setReadOnly(
+            False
+        )
+
+        self.model_name_preview.setPlaceholderText(
+            (
+                "После разбора конфигурации здесь "
+                "появится сформированное наименование. "
+                "При необходимости его можно исправить."
+            )
+        )
+
+        self.model_name_preview.setMaximumHeight(
+            90
+        )
+
+        right_layout.addWidget(
+            self.model_name_preview
+        )
+
+        # =================================================
+        # Гарантия
+        # =================================================
+
+        warranty_layout = QHBoxLayout()
+
+        warranty_layout.setContentsMargins(
+            0,
+            4,
+            0,
+            0,
+        )
+
+        warranty_layout.setSpacing(
+            8
+        )
+
+        self.warranty_label = QLabel(
+            "Гарантия, мес.:"
+        )
+
+        self.warranty_label.setStyleSheet(
+            """
+            QLabel {
+                font-weight: bold;
+                font-size: 14px;
+            }
+            """
+        )
+
+        self.warranty_spin = QSpinBox()
+
+        # -------------------------------------------------
+        # Допускаем срок от 0 до 120 месяцев.
+        #
+        # 0 можно использовать для изделия
+        # без гарантийного срока.
+        # -------------------------------------------------
+
+        self.warranty_spin.setRange(
+            0,
+            120,
+        )
+
+        self.warranty_spin.setValue(
+            36
+        )
+
+        self.warranty_spin.setSuffix(
+            " мес."
+        )
+
+        self.warranty_spin.setFixedWidth(
+            110
+        )
+
+        warranty_layout.addWidget(
+            self.warranty_label
+        )
+
+        warranty_layout.addWidget(
+            self.warranty_spin
+        )
+
+        warranty_layout.addStretch()
+
+        right_layout.addLayout(
+            warranty_layout
+        )
+
+        # =================================================
+        # Добавляем правую панель
+        # =================================================
+
+        splitter.addWidget(
+            right
+        )
+
+        # -------------------------------------------------
+        # Размеры панелей
+        # -------------------------------------------------
 
         splitter.setStretchFactor(
             0,
@@ -122,44 +317,30 @@ class MainWindow(QMainWindow):
 
         splitter.setStretchFactor(
             1,
-            3,
-        )
-
-        splitter.setStretchFactor(
-            2,
-            4,
+            5,
         )
 
         splitter.setSizes(
             [
-                420,
-                520,
-                660,
+                430,
+                1270,
             ]
         )
 
-        layout.addWidget(
+        root_layout.addWidget(
             splitter
         )
 
-        #
-        # Сигналы панели
-        #
+        # =================================================
+        # Сигналы
+        # =================================================
 
         self.toolbar.paste_requested.connect(
-            self.paste_from_clipboard
+            self.refresh_configuration
         )
 
         self.toolbar.new_build_requested.connect(
             self.create_new_build
-        )
-
-        self.toolbar.export_pdf_requested.connect(
-            self.export_pdf
-        )
-
-        self.toolbar.print_requested.connect(
-            self.print_label
         )
 
         self.toolbar.history_requested.connect(
@@ -172,29 +353,91 @@ class MainWindow(QMainWindow):
 
     # ---------------------------------------------------------
 
-    def paste_from_clipboard(self):
+    def refresh_configuration(self):
+        """
+        Повторно разбирает исходный текст.
 
-        clipboard = QApplication.clipboard()
+        Перед повторным парсингом сохраняет
+        введённые пользователем:
 
-        text = clipboard.text()
+        - количества;
+        - серийные номера комплектующих.
 
-        self.clipboard_panel.set_clipboard_text(
-            text
+        Гарантия при обновлении не меняется.
+        """
+
+        text = (
+            self.clipboard_panel
+            .toPlainText()
         )
+
+        if not text.strip():
+
+            QMessageBox.warning(
+                self,
+                "Нет данных",
+                (
+                    "Левое поле пустое.\n\n"
+                    "Вставьте спецификацию из 1С."
+                ),
+            )
+
+            return
+
+        # -------------------------------------------------
+        # Сохраняем данные таблицы
+        # -------------------------------------------------
+
+        quantities = (
+            self.components_table
+            .get_quantities()
+        )
+
+        serial_numbers = (
+            self.components_table
+            .get_serial_numbers()
+        )
+
+        # -------------------------------------------------
+        # Новый разбор текста
+        # -------------------------------------------------
+
+        configuration = (
+            self.parser.parse(
+                text
+            )
+        )
+
+        # -------------------------------------------------
+        # Возвращаем ручные значения
+        # -------------------------------------------------
+
+        for item in configuration.items:
+
+            key = (
+                item.category.value,
+                item.name.strip(),
+            )
+
+            if key in quantities:
+
+                item.quantity = (
+                    quantities[key]
+                )
+
+            if key in serial_numbers:
+
+                item.serial_number = (
+                    serial_numbers[key]
+                )
 
         self.current_configuration = (
-            self.parser.parse(text)
-        )
-        self.current_label.manufacturer = (
-            self.preview_panel.manufacturer()
+            configuration
         )
 
-        self.current_label.layout = (
-            self.preview_panel.layout_mode()
-        )
-        self.components_table.set_data(
-            self.current_configuration
-        )
+        # -------------------------------------------------
+        # Предпросмотр
+        # -------------------------------------------------
 
         self.current_label = (
             self.build_service.preview(
@@ -202,157 +445,153 @@ class MainWindow(QMainWindow):
             )
         )
 
-        self.preview_panel.set_label(
-            self.current_label
+        # -------------------------------------------------
+        # Таблица
+        # -------------------------------------------------
+
+        self.components_table.set_data(
+            self.current_configuration
+        )
+
+        # -------------------------------------------------
+        # Автоматически сформированное название
+        # -------------------------------------------------
+
+        self.model_name_preview.setPlainText(
+            self.current_label.model_name
+            or ""
         )
 
     # ---------------------------------------------------------
 
     def create_new_build(self):
+        """
+        Создаёт очередной компьютер.
+
+        После успешного создания:
+
+        - исходный текст остаётся;
+        - количества остаются;
+        - название остаётся;
+        - гарантия остаётся;
+        - серийники комплектующих очищаются.
+
+        Поэтому можно сразу собирать следующий
+        компьютер такой же конфигурации.
+        """
 
         if not self.current_configuration.items:
 
             QMessageBox.warning(
                 self,
                 "Нет данных",
-                "Сначала вставьте конфигурацию из буфера."
+                (
+                    "Сначала вставьте конфигурацию "
+                    "и нажмите «Обновить»."
+                ),
             )
 
             return
+
+        # -------------------------------------------------
+        # Переносим в Configuration актуальные
+        # количества и серийники из таблицы.
+        # -------------------------------------------------
+
+        self.components_table.apply_to_configuration(
+            self.current_configuration
+        )
+
+        # -------------------------------------------------
+        # Забираем текущее название.
+        # -------------------------------------------------
+
+        manual_model_name = (
+            self.model_name_preview
+            .toPlainText()
+            .strip()
+        )
+
+        # -------------------------------------------------
+        # Текущий срок гарантии
+        # -------------------------------------------------
+
+        warranty_months = (
+            self.warranty_spin.value()
+        )
+
+        # -------------------------------------------------
+        # Создание изделия
+        # -------------------------------------------------
 
         self.current_label = (
             self.build_service.create(
-                self.current_configuration
+                self.current_configuration,
+                manual_model_name,
+                warranty_months,
             )
         )
-        self.current_label.manufacturer = (
-            self.preview_panel.manufacturer()
+
+        # -------------------------------------------------
+        # Показываем окончательное имя
+        # -------------------------------------------------
+
+        self.model_name_preview.setPlainText(
+            self.current_label.model_name
+            or ""
         )
 
-        self.current_label.layout = (
-            self.preview_panel.layout_mode()
-        )
-        self.preview_panel.set_label(
-            self.current_label
-        )
-
-        #
-        # Обновляем журнал
-        #
+        # -------------------------------------------------
+        # Обновляем историю
+        # -------------------------------------------------
 
         self.history_window.panel.refresh()
 
-        QMessageBox.information(
-            self,
-            "Готово",
-            f"Создано изделие № {self.current_label.serial}"
-        )
-    # ---------------------------------------------------------
-
-    def export_pdf(self):
-
-        if not self.current_label.title:
-
-            QMessageBox.warning(
-                self,
-                "Нет данных",
-                "Сначала загрузите конфигурацию."
-            )
-            return
-
-        if not self.current_label.serial:
-
-            QMessageBox.warning(
-                self,
-                "Нет изделия",
-                "Сначала нажмите «Новая сборка»."
-            )
-            return
-
-        cpu = (
-            self.current_label.cpu
-            .replace("/", "-")
-            .replace(" ", "_")
+        created_serial = (
+            self.current_label.serial
         )
 
-        filename = (
-            f"ByTop_PE_{cpu}_"
-            f"SN{self.current_label.serial}.pdf"
-        )
+        # -------------------------------------------------
+        # Подготавливаем Configuration
+        # для следующего одинакового ПК.
+        #
+        # Очищаем ТОЛЬКО серийники.
+        #
+        # Количество, название и гарантия остаются.
+        # -------------------------------------------------
 
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Экспорт PDF",
-            str(Path.home() / filename),
-            "PDF (*.pdf)"
-        )
+        for item in self.current_configuration.items:
 
-        if not path:
-            return
+            item.serial_number = ""
 
-        self.print_engine.export_pdf(
-            self.current_label,
-            path,
-        )
+        # -------------------------------------------------
+        # Очищаем серийники в таблице
+        # -------------------------------------------------
+
+        self.components_table.clear_serial_numbers()
+
+        # -------------------------------------------------
+        # Сообщение
+        # -------------------------------------------------
 
         QMessageBox.information(
             self,
             "Готово",
-            "PDF успешно сохранён."
+            (
+                "Создано изделие № "
+                f"{created_serial}\n\n"
+                "Гарантия: "
+                f"{warranty_months} мес.\n\n"
+                "Серийные номера комплектующих "
+                "очищены для следующей сборки."
+            ),
         )
 
-    # ---------------------------------------------------------
+        # -------------------------------------------------
+        # Сразу готовимся к следующему сканированию
+        # -------------------------------------------------
 
-    def print_label(self):
-
-        if not self.current_label.title:
-
-            QMessageBox.warning(
-                self,
-                "Нет данных",
-                "Сначала загрузите конфигурацию."
-        )
-
-        return
-
-        if not self.current_label.serial:
-
-            QMessageBox.warning(
-                self,
-                "Нет изделия",
-                "Сначала нажмите «Новая сборка»."
-        )
-
-        return
-
-        dialog = PrintDialog(self)
-
-        if not dialog.exec():
-
-            return
-
-        self.current_label.layout = (
-        dialog.page_layout()
-        )
-
-        copies = dialog.copies()
-
-        #
-        # Пока печатаем одинаковые экземпляры.
-        #
-
-        for _ in range(copies):
-            print("LABEL =", self.current_label.layout)
-            print("UI =", self.preview_panel.layout_mode())
-            self.print_engine.print_to_printer(
-                self.current_label
-            )
-
-        QMessageBox.information(
-            self,
-            "Печать",
-            "Документ отправлен на принтер."
-        )
+        self.components_table.focus_first_serial()
 
     # ---------------------------------------------------------
 
@@ -370,18 +609,96 @@ class MainWindow(QMainWindow):
 
     def show_settings(self):
 
-        dialog = SettingsDialog(self)
+        dialog = SettingsDialog(
+            self
+        )
 
-        if dialog.exec():
+        dialog.exec()
 
-            #
-            # Перечитываем настройки
-            #
+    # ---------------------------------------------------------
 
-            self.print_engine = PrintEngine()
+    def export_excel(self):
 
-            QMessageBox.information(
+        QMessageBox.information(
+            self,
+            "В разработке",
+            (
+                "Экспорт будет работать "
+                "через шаблон Excel."
+            ),
+        )
+
+    # ---------------------------------------------------------
+
+    def print_label(self):
+
+        QMessageBox.information(
+            self,
+            "Информация",
+            (
+                "Печать будет доступна "
+                "из карточки изделия."
+            ),
+        )
+
+    # ---------------------------------------------------------
+
+    def open_configuration(self):
+
+        filename, _ = (
+            QFileDialog.getOpenFileName(
                 self,
-                "Настройки",
-                "Настройки успешно сохранены."
+                "Открыть конфигурацию",
+                str(
+                    Path.home()
+                ),
+                (
+                    "Текстовые файлы (*.txt);;"
+                    "Все файлы (*.*)"
+                ),
             )
+        )
+
+        if not filename:
+
+            return
+
+        try:
+
+            with open(
+                filename,
+                "r",
+                encoding="utf-8",
+            ) as file:
+
+                text = file.read()
+
+            self.clipboard_panel.set_clipboard_text(
+                text
+            )
+
+            self.refresh_configuration()
+
+        except Exception as error:
+
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                (
+                    "Не удалось открыть файл.\n\n"
+                    f"{error}"
+                ),
+            )
+
+    # ---------------------------------------------------------
+
+    def closeEvent(
+        self,
+        event,
+    ):
+
+        if self.history_window.isVisible():
+
+            self.history_window.close()
+
+        event.accept()

@@ -1,9 +1,17 @@
 class ModelNameBuilder:
     """
-    Формирует коммерческое название компьютера.
-    """
+    Формирует короткое наименование компьютера.
 
-    SERIES = "ByTop PE"
+    Пример:
+
+    AMD Ryzen 5 7500F/
+    DDR5 16GB/
+    SSD NVMe 1TB/
+    GeForce RTX 5060 8GB GDDR7/
+    mATX/
+    750W/
+    Windows 11 Pro
+    """
 
     def build(
         self,
@@ -13,38 +21,139 @@ class ModelNameBuilder:
         gpu: str,
         case: str,
         psu: str,
+        operating_system: str = "",
     ) -> str:
 
-        parts = [self.SERIES]
+        parts = []
+
+        # -------------------------------------------------
+        # Процессор
+        # -------------------------------------------------
 
         if cpu:
-            parts.append(cpu)
 
-        if ram:
-            short_ram = ram
+            parts.append(
+                cpu.strip()
+            )
 
-            # Убираем информацию в скобках
-            if "(" in short_ram:
-                short_ram = short_ram.split("(")[0].strip()
+        # -------------------------------------------------
+        # Оперативная память
+        #
+        # Частоту RAM в короткое имя
+        # компьютера не добавляем.
+        # -------------------------------------------------
 
-            words = short_ram.split()
+        ram_short = self._short_ram(
+            ram
+        )
 
-            # DDR5 64GB -> 64GB DDR5
-            if len(words) >= 2:
-                short_ram = f"{words[1]} {words[0]}"
+        if ram_short:
 
-            parts.append(short_ram)
+            parts.append(
+                ram_short
+            )
+
+        # -------------------------------------------------
+        # Накопитель
+        # -------------------------------------------------
 
         if storage:
-            parts.append(storage)
+
+            parts.append(
+                storage.strip()
+            )
+
+        # -------------------------------------------------
+        # Видеокарта
+        # -------------------------------------------------
 
         if gpu:
-            parts.append(gpu)
+
+            parts.append(
+                gpu.strip()
+            )
+
+        # -------------------------------------------------
+        # Корпус
+        # -------------------------------------------------
 
         if case:
-            parts.append(case)
+
+            parts.append(
+                case.strip()
+            )
+
+        # -------------------------------------------------
+        # Блок питания
+        # -------------------------------------------------
 
         if psu:
-            parts.append(psu)
 
-        return " / ".join(parts)
+            parts.append(
+                psu.strip()
+            )
+
+        # -------------------------------------------------
+        # Операционная система
+        # -------------------------------------------------
+
+        if operating_system:
+
+            parts.append(
+                operating_system.strip()
+            )
+
+        return "/".join(
+            parts
+        )
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_ram(
+        ram: str,
+    ) -> str:
+
+        if not ram:
+
+            return ""
+
+        parts = ram.split()
+
+        result = []
+
+        for part in parts:
+
+            upper = part.upper()
+
+            # ---------------------------------------------
+            # Частота RAM
+            #
+            # 5600MHz убираем.
+            # ---------------------------------------------
+
+            if upper.endswith(
+                "MHZ"
+            ):
+                continue
+
+            # ---------------------------------------------
+            # Количество модулей
+            #
+            # (2x16GB) также убираем
+            # из короткого имени.
+            # ---------------------------------------------
+
+            if (
+                part.startswith("(")
+                and part.endswith(")")
+            ):
+                continue
+
+            result.append(
+                part
+            )
+
+        return " ".join(
+            result
+        ).strip()

@@ -1,12 +1,17 @@
 from datetime import datetime
 
 from builder.model_builder import ModelBuilder
+
 from models.configuration import Configuration
 from models.label_model import LabelModel
 
-from services.serial_number_generator import SerialNumberGenerator
+from services.serial_number_generator import (
+    SerialNumberGenerator,
+)
 from services.article_service import ArticleService
-from services.build_history_service import BuildHistoryService
+from services.build_history_service import (
+    BuildHistoryService,
+)
 from services.user_service import UserService
 
 
@@ -19,13 +24,21 @@ class BuildService:
 
         self.model_builder = ModelBuilder()
 
-        self.serial_generator = SerialNumberGenerator()
+        self.serial_generator = (
+            SerialNumberGenerator()
+        )
 
-        self.article_service = ArticleService()
+        self.article_service = (
+            ArticleService()
+        )
 
-        self.history = BuildHistoryService()
+        self.history = (
+            BuildHistoryService()
+        )
 
-        self.user_service = UserService()
+        self.user_service = (
+            UserService()
+        )
 
     # ---------------------------------------------------------
 
@@ -33,16 +46,18 @@ class BuildService:
         self,
         configuration: Configuration,
     ) -> LabelModel:
-        """
-        Предпросмотр после Ctrl+V.
 
-        Серийный номер и код модели
-        пока не создаются.
-        """
+        label = (
+            self.model_builder.build(
+                configuration
+            )
+        )
 
-        label = self.model_builder.build(configuration)
-
-        label.date = datetime.now().strftime("%d.%m.%Y")
+        label.date = (
+            datetime.now().strftime(
+                "%d.%m.%Y"
+            )
+        )
 
         return label
 
@@ -51,72 +66,142 @@ class BuildService:
     def create(
         self,
         configuration: Configuration,
+        model_name: str = "",
+        warranty_months: int = 36,
     ) -> LabelModel:
         """
-        Создание изделия.
+        Создаёт изделие и сохраняет его в БД.
         """
 
-        label = self.model_builder.build(configuration)
+        label = (
+            self.model_builder.build(
+                configuration
+            )
+        )
 
-        #
-        # Серийный номер
-        #
+        # -------------------------------------------------
+        # Ручное название
+        # -------------------------------------------------
 
-        label.serial = self.serial_generator.next()
+        manual_model_name = (
+            model_name.strip()
+            if model_name
+            else ""
+        )
 
-        label.date = datetime.now().strftime("%d.%m.%Y")
+        if manual_model_name:
 
-        #
+            label.model_name = (
+                manual_model_name
+            )
+
+        if not label.model_name:
+
+            label.model_name = (
+                "Системный блок"
+            )
+
+        # -------------------------------------------------
+        # Гарантия
+        # -------------------------------------------------
+
+        try:
+
+            warranty_months = int(
+                warranty_months
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            warranty_months = 36
+
+        if warranty_months < 0:
+
+            warranty_months = 0
+
+        label.warranty_months = (
+            warranty_months
+        )
+
+        # -------------------------------------------------
+        # Серийный номер компьютера
+        # -------------------------------------------------
+
+        label.serial = (
+            self.serial_generator.next()
+        )
+
+        # -------------------------------------------------
+        # Дата производства
+        # -------------------------------------------------
+
+        label.date = (
+            datetime.now().strftime(
+                "%d.%m.%Y"
+            )
+        )
+
+        # -------------------------------------------------
         # Сигнатура модели
         #
+        # Гарантия сюда НЕ входит.
+        #
+        # Одинаковая конфигурация с разным сроком
+        # гарантии остаётся одной моделью.
+        # -------------------------------------------------
 
         signature = "|".join(
             [
-                label.cpu,
-                label.motherboard,
-                label.cooler,
-                label.ram,
-                label.storage,
-                label.gpu,
-                label.case,
-                label.psu,
+                label.cpu or "",
+                label.motherboard or "",
+                label.cooler or "",
+                label.ram or "",
+                label.storage or "",
+                label.gpu or "",
+                label.case or "",
+                label.psu or "",
+                label.operating_system or "",
             ]
         )
 
-        #
-        # Внутреннее название модели
-        #
-
-        model_name = label.model_name or label.title
+        final_model_name = (
+            label.model_name
+        )
 
         internal_name = (
-            label.internal_name
-            or model_name
+            final_model_name
         )
 
-        #
-        # Получаем код модели
-        #
+        # -------------------------------------------------
+        # Артикул модели
+        # -------------------------------------------------
 
-        label.article_code = self.article_service.get_or_create(
-            signature,
-            model_name,
-            internal_name,
+        label.article_code = (
+            self.article_service.get_or_create(
+                signature,
+                final_model_name,
+                internal_name,
+            )
         )
 
-        #
-        # Временно сохраняем автора создания.
-        # В следующем этапе это поле будет
-        # записываться в базу данных.
-        #
+        # -------------------------------------------------
+        # Пользователь
+        # -------------------------------------------------
 
-        label.created_by = self.user_service.current_user
+        label.created_by = (
+            self.user_service.current_user
+        )
 
-        #
-        # Сохраняем сборку
-        #
+        # -------------------------------------------------
+        # Сохранение
+        # -------------------------------------------------
 
-        self.history.save(label)
+        self.history.save(
+            label
+        )
 
         print(
             f"CREATE: {label.serial} "

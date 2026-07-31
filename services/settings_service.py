@@ -15,11 +15,32 @@ class SettingsService:
 
         defaults = {
 
-            "template_path": "resources/templates/Спецификация.xlsx",
+            #
+            # Шаблоны документов
+            #
 
-            "pdf_folder": "pdf",
+            "template_path":
+                "resources/templates/spec_v2.xlsx",
 
-            "printer": "",
+            "passport_template_path":
+                "resources/templates/pass.xlsx",
+
+            "sticker_template_path":
+                "resources/templates/sticker.xlsx",
+
+            #
+            # PDF
+            #
+
+            "pdf_folder":
+                "pdf",
+
+            #
+            # Принтер
+            #
+
+            "printer":
+                "",
 
         }
 
@@ -34,7 +55,10 @@ class SettingsService:
 
                 VALUES (?, ?)
                 """,
-                (key, value),
+                (
+                    key,
+                    value,
+                ),
             )
 
         self.db.commit()
@@ -49,6 +73,7 @@ class SettingsService:
             """
             SELECT value
             FROM settings
+
             WHERE key=?
             """,
             (key,),
@@ -64,7 +89,11 @@ class SettingsService:
 
     # ---------------------------------------------------------
 
-    def set(self, key, value):
+    def set(
+        self,
+        key,
+        value,
+    ):
 
         cursor = self.db.cursor()
 

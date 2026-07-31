@@ -1,111 +1,189 @@
 from pathlib import Path
 
 from models.label_model import LabelModel
-from models.page_layout import PageLayout
 
 from printing.excel_com import ExcelCom
-from services.qr_service import QrService
+from printing.layout_coordinates import (
+    get_layout,
+    get_print_area,
+)
+from printing.specification_writer import (
+    SpecificationWriter,
+)
+from printing.printer_utils import (
+    temporary_default_printer,
+)
 
 
 class ExcelSpecification:
     """
-    Формирование производственной спецификации.
+    Формирование страницы спецификации.
+
+    Страница может содержать
+    от одной до четырёх спецификаций.
+
+    Каждая спецификация располагается
+    в одной из позиций листа.
     """
 
-    def __init__(self, template: str):
+    def __init__(
+        self,
+        template: str,
+    ):
 
         self.template = Path(template)
 
         if not self.template.exists():
+
             raise FileNotFoundError(
                 f"Не найден шаблон {self.template}"
             )
 
-        self.qr = QrService()
-
     # ---------------------------------------------------------
 
-    def blocks(self, layout):
-
-        if layout == PageLayout.ONE_SPEC_THREE_ADDRESS:
-            return ["TOP_LEFT"]
-
-        if layout == PageLayout.TWO_SPEC_TWO_ADDRESS:
-            return [
-                "TOP_LEFT",
-                "TOP_RIGHT",
-            ]
-
-        if layout == PageLayout.THREE_SPEC_ONE_ADDRESS:
-            return [
-                "TOP_LEFT",
-                "TOP_RIGHT",
-                "BOTTOM_LEFT",
-            ]
-
-        return [
-            "TOP_LEFT",
-            "TOP_RIGHT",
-            "BOTTOM_LEFT",
-            "BOTTOM_RIGHT",
-        ]
-
-    # ---------------------------------------------------------
-
-    def fill_document(
+    def fill_page(
         self,
-        excel,
-        label,
+        excel: ExcelCom,
+        labels: list[LabelModel],
+        positions: list[int],
     ):
 
-        serial_qr = self.qr.create_serial(
-            label.serial
+        if len(labels) != len(positions):
+
+            raise ValueError(
+                "Количество позиций не совпадает "
+                "с количеством спецификаций."
+            )
+
+        sheet = excel.specification_sheet()
+
+        for label, position in zip(
+            labels,
+            positions,
+        ):
+
+            coords = get_layout(
+                position
+            )
+
+            writer = SpecificationWriter(
+                sheet,
+                coords,
+            )
+
+            writer.write(
+                label
+            )
+
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def print_area(
+        positions: list[int],
+    ) -> str:
+        """
+        Область для экспорта.
+
+        Для PDF можно использовать область,
+        соответствующую выбранным позициям.
+        """
+
+        return get_print_area(
+            positions
         )
 
-        article_qr = self.qr.create_article(
-            label.article_code
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def full_print_area() -> str:
+        """
+        Полная область листа спецификации.
+
+        ВАЖНО:
+
+        При печати на физический лист всегда
+        печатается полный макет 2 x 2.
+
+        Неиспользуемые блоки предварительно
+        очищаются методом clear_unused_blocks().
+
+        Благодаря этому выбранная позиция
+        сохраняет своё физическое место:
+
+            1 | 2
+            -----
+            3 | 4
+        """
+
+        return "A1:BG53"
+
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def clear_unused_blocks(
+        excel: ExcelCom,
+        positions: list[int],
+    ):
+        """
+        Удаляет неиспользуемые блоки
+        перед печатью.
+
+        Книга после печати закрывается
+        без сохранения.
+        """
+
+        used = set(
+            positions
         )
 
-        for block in self.blocks(label.layout):
+        sheet = (
+            excel.specification_sheet()
+        )
 
-            excel.write_specification(
-                label,
-                block,
-            )
+        blocks = {
+            1: "A1:AC26",
+            2: "AE1:BG26",
+            3: "A28:AC53",
+            4: "AE28:BG53",
+        }
 
-            excel.insert_serial_qr(
-                serial_qr,
-                block,
-            )
+        for (
+            position,
+            area,
+        ) in blocks.items():
 
-            excel.insert_article_qr(
-                article_qr,
-                block,
-            )
+            if position not in used:
 
-        excel.write_addresses(label)
+                excel.clear_range(
+                    sheet,
+                    area,
+                )
 
     # ---------------------------------------------------------
 
     def build(
         self,
-        label: LabelModel,
+        labels: list[LabelModel],
         output_file: str,
+        positions: list[int],
     ):
 
         excel = ExcelCom()
 
-        excel.open(str(self.template))
+        excel.open(
+            str(self.template)
+        )
 
         try:
 
-            self.fill_document(
+            self.fill_page(
                 excel,
-                label,
+                labels,
+                positions,
             )
 
             excel.save_as(
-                output_file
+                output_file,
             )
 
         finally:
@@ -116,24 +194,44 @@ class ExcelSpecification:
 
     def export_pdf(
         self,
-        label: LabelModel,
+        labels: list[LabelModel],
         pdf_file: str,
+        positions: list[int],
     ):
+        """
+        Экспорт в PDF.
+
+        Здесь пока сохраняем прежнее поведение:
+        PDF формируется по выбранной области.
+
+        Это не влияет на позиционирование
+        при печати на реальном листе.
+        """
 
         excel = ExcelCom()
 
-        excel.open(str(self.template))
+        excel.open(
+            str(self.template)
+        )
 
         try:
 
-            self.fill_document(
+            self.fill_page(
                 excel,
-                label,
+                labels,
+                positions,
+            )
+
+            sheet = (
+                excel.specification_sheet()
             )
 
             excel.export_pdf(
-                label,
+                sheet,
                 pdf_file,
+                self.print_area(
+                    positions
+                ),
             )
 
         finally:
@@ -144,40 +242,81 @@ class ExcelSpecification:
 
     def print_document(
         self,
-        label: LabelModel,
+        labels: list[LabelModel],
+        positions: list[int],
         printer_name: str | None = None,
     ):
+        """
+        Печать спецификаций.
 
-        excel = ExcelCom()
+        Всегда печатается полный макет листа
+        из четырёх позиций.
 
-        excel.open(str(self.template))
+        Например, если выбрана позиция 4:
 
-        try:
+            [ пусто ] [ пусто ]
+            [ пусто ] [ спецификация ]
 
-            self.fill_document(
-                excel,
-                label,
+        Excel получает всю область A1:BG53,
+        поэтому позиция 4 не растягивается
+        на место позиции 1.
+        """
+
+        with temporary_default_printer(
+            printer_name
+        ):
+
+            excel = ExcelCom()
+
+            excel.open(
+                str(self.template)
             )
 
-            if printer_name:
+            try:
 
-                try:
-                    excel.excel.ActivePrinter = printer_name
+                # -----------------------------------------
+                # Записываем данные именно
+                # в выбранные позиции.
+                # -----------------------------------------
 
-                except Exception as e:
+                self.fill_page(
+                    excel,
+                    labels,
+                    positions,
+                )
 
-                    print(
-                        "PRINTER =",
-                        printer_name,
-                    )
+                # -----------------------------------------
+                # Очищаем остальные позиции шаблона.
+                # -----------------------------------------
 
-                    print(
-                        "ERROR =",
-                        e,
-                    )
+                self.clear_unused_blocks(
+                    excel,
+                    positions,
+                )
 
-            excel.print(label)
+                sheet = (
+                    excel.specification_sheet()
+                )
 
-        finally:
+                # -----------------------------------------
+                # ВАЖНО:
+                #
+                # Не используем:
+                #
+                # self.print_area(positions)
+                #
+                # потому что тогда Excel воспринимает
+                # выбранный блок как отдельную страницу
+                # и переносит его в начало листа.
+                #
+                # Печатаем весь физический макет 2 x 2.
+                # -----------------------------------------
 
-            excel.close()
+                excel.print(
+                    sheet,
+                    self.full_print_area(),
+                )
+
+            finally:
+
+                excel.close()

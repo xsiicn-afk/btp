@@ -1,41 +1,52 @@
-from printing.layout_coordinates import (
-    TOP_LEFT,
-    TOP_RIGHT,
-    BOTTOM_LEFT,
-    BOTTOM_RIGHT,
-)
-
-
 class SpecificationWriter:
     """
-    Заполняет спецификацию изделия.
+    Заполняет один блок производственной спецификации.
+
+    Для перечня комплектующих используются
+    исходные позиции из label.items.
+
+    Поэтому в спецификацию и паспорт попадает
+    полное наименование комплектующего,
+    полученное из исходной спецификации 1С.
+
+    Сокращённые поля label.cpu, label.ram,
+    label.storage и т.д. используются только
+    для формирования названия модели и других
+    компактных представлений.
     """
 
-    BLOCKS = {
-        "TOP_LEFT": TOP_LEFT,
-        "TOP_RIGHT": TOP_RIGHT,
-        "BOTTOM_LEFT": BOTTOM_LEFT,
-        "BOTTOM_RIGHT": BOTTOM_RIGHT,
-    }
+    # ---------------------------------------------------------
 
     def __init__(
         self,
-        sheet,
-        block="TOP_LEFT",
+        sheet=None,
+        coordinates=None,
     ):
+
         self.sheet = sheet
-        self.coords = self.BLOCKS[block]
+        self.coords = coordinates or {}
 
     # ---------------------------------------------------------
 
-    def write(self, label):
+    def write(
+        self,
+        label,
+    ):
 
-        self.write_header(label)
-        self.write_components(label)
+        self._write_header(
+            label
+        )
+
+        self._write_components(
+            label
+        )
 
     # ---------------------------------------------------------
 
-    def write_header(self, label):
+    def _write_header(
+        self,
+        label,
+    ):
 
         c = self.coords
 
@@ -63,80 +74,241 @@ class SpecificationWriter:
 
     # ---------------------------------------------------------
 
-    def write_components(self, label):
+    def get_rows(
+        self,
+        label,
+    ):
+        """
+        Возвращает строки состава изделия.
+
+        Формат:
+
+            [
+                (полное_наименование, количество),
+                ...
+            ]
+
+        Главным источником является label.items.
+
+        Это полный исходный состав компьютера,
+        включая:
+
+        - полное название комплектующего;
+        - количество;
+        - OTHER;
+        - операционную систему;
+        - монитор и другие дополнительные позиции.
+
+        Серийные номера здесь пока намеренно
+        не выводятся.
+        """
+
+        rows = []
+
+        # =================================================
+        # Полный состав изделия
+        # =================================================
+
+        items = getattr(
+            label,
+            "items",
+            [],
+        )
+
+        for item in items:
+
+            name = (
+                getattr(
+                    item,
+                    "name",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if not name:
+                continue
+
+            quantity = getattr(
+                item,
+                "quantity",
+                1,
+            )
+
+            try:
+
+                quantity = int(
+                    quantity
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                quantity = 1
+
+            if quantity < 1:
+
+                quantity = 1
+
+            rows.append(
+                (
+                    name,
+                    quantity,
+                )
+            )
+
+        # =================================================
+        # Совместимость со старыми изделиями
+        # =================================================
+        #
+        # Старые записи в базе могут не иметь build_items.
+        #
+        # В таком случае используем старые сокращённые
+        # поля, чтобы старые изделия по-прежнему
+        # можно было распечатать.
+        # =================================================
+
+        if not rows:
+
+            component_fields = (
+                "cpu",
+                "cooler",
+                "motherboard",
+                "ram",
+                "storage",
+                "case",
+                "psu",
+                "gpu",
+            )
+
+            for field in component_fields:
+
+                value = getattr(
+                    label,
+                    field,
+                    "",
+                )
+
+                if value:
+
+                    rows.append(
+                        (
+                            value,
+                            1,
+                        )
+                    )
+
+            # ---------------------------------------------
+            # Операционная система старого изделия
+            # ---------------------------------------------
+
+            operating_system = getattr(
+                label,
+                "operating_system",
+                "",
+            )
+
+            if operating_system:
+
+                rows.append(
+                    (
+                        operating_system,
+                        1,
+                    )
+                )
+
+            # ---------------------------------------------
+            # Старые дополнительные позиции
+            # ---------------------------------------------
+
+            additional_items = getattr(
+                label,
+                "additional_items",
+                [],
+            )
+
+            for item in additional_items:
+
+                name = (
+                    getattr(
+                        item,
+                        "name",
+                        "",
+                    )
+                    or ""
+                ).strip()
+
+                if not name:
+                    continue
+
+                quantity = getattr(
+                    item,
+                    "quantity",
+                    1,
+                )
+
+                rows.append(
+                    (
+                        name,
+                        quantity,
+                    )
+                )
+
+        return rows
+
+    # ---------------------------------------------------------
+
+    def _write_components(
+        self,
+        label,
+    ):
 
         c = self.coords
 
-        component_cell = c["FIRST_COMPONENT"]
-        qty_cell = c["FIRST_QTY"]
+        first_component = (
+            c["FIRST_COMPONENT"]
+        )
 
-        start_row = int(
-            "".join(
-                ch for ch in component_cell
-                if ch.isdigit()
-            )
+        first_qty = (
+            c["FIRST_QTY"]
         )
 
         component_column = "".join(
-            ch for ch in component_cell
-            if ch.isalpha()
+            filter(
+                str.isalpha,
+                first_component,
+            )
         )
 
         qty_column = "".join(
-            ch for ch in qty_cell
-            if ch.isalpha()
+            filter(
+                str.isalpha,
+                first_qty,
+            )
         )
 
-        row = start_row
+        row = int(
+            "".join(
+                filter(
+                    str.isdigit,
+                    first_component,
+                )
+            )
+        )
 
-        components = [
-
-            label.cpu,
-            label.cooler,
-            label.motherboard,
-            label.ram,
-            label.storage,
-            label.case,
-            label.psu,
-            label.gpu,
-
-        ]
-
-        for value in components:
-
-            if not value:
-                continue
+        for (
+            name,
+            quantity,
+        ) in self.get_rows(label):
 
             self.sheet.Range(
                 f"{component_column}{row}"
-            ).Value = value
+            ).Value = name
 
             self.sheet.Range(
                 f"{qty_column}{row}"
-            ).Value = 1
-
-            row += 1
-
-        if label.operating_system:
-
-            self.sheet.Range(
-                f"{component_column}{row}"
-            ).Value = label.operating_system
-
-            self.sheet.Range(
-                f"{qty_column}{row}"
-            ).Value = 1
-
-            row += 1
-
-        for item in label.additional_items:
-
-            self.sheet.Range(
-                f"{component_column}{row}"
-            ).Value = item.name
-
-            self.sheet.Range(
-                f"{qty_column}{row}"
-            ).Value = item.quantity
+            ).Value = quantity
 
             row += 1

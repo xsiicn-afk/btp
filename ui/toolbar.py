@@ -1,86 +1,103 @@
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QToolBar
+
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QPushButton,
+    QWidget,
+)
 
 
-class MainToolBar(QToolBar):
+class MainToolBar(QWidget):
 
     paste_requested = Signal()
     new_build_requested = Signal()
-
-    export_pdf_requested = Signal()
-
-    print_requested = Signal()
     history_requested = Signal()
     settings_requested = Signal()
 
     def __init__(self):
-        super().__init__("Инструменты")
+        super().__init__()
 
-        self.setMovable(False)
+        self.init_ui()
 
-        #
-        # Вставить
-        #
+    # ---------------------------------------------------------
 
-        action = QAction("📋 Вставить", self)
-        action.triggered.connect(
+    def init_ui(self):
+
+        layout = QHBoxLayout(
+            self
+        )
+
+        layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        layout.setSpacing(
+            6
+        )
+
+        # -------------------------------------------------
+        # Кнопки
+        # -------------------------------------------------
+
+        self.btn_paste = QPushButton(
+            "Обновить"
+        )
+
+        self.btn_new_build = QPushButton(
+            "Создать изделие"
+        )
+
+        self.btn_history = QPushButton(
+            "История"
+        )
+
+        self.btn_settings = QPushButton(
+            "Настройки"
+        )
+
+        # -------------------------------------------------
+        # Все кнопки располагаются подряд слева.
+        # -------------------------------------------------
+
+        layout.addWidget(
+            self.btn_paste
+        )
+
+        layout.addWidget(
+            self.btn_new_build
+        )
+
+        layout.addWidget(
+            self.btn_history
+        )
+
+        layout.addWidget(
+            self.btn_settings
+        )
+
+        # Свободное место остаётся справа.
+
+        layout.addStretch()
+
+        # -------------------------------------------------
+        # Сигналы
+        # -------------------------------------------------
+
+        self.btn_paste.clicked.connect(
             self.paste_requested.emit
         )
-        self.addAction(action)
 
-        #
-        # Создать документ
-        #
-
-        action = QAction("🆕 Создать документ", self)
-        action.triggered.connect(
+        self.btn_new_build.clicked.connect(
             self.new_build_requested.emit
         )
-        self.addAction(action)
 
-        self.addSeparator()
-
-        #
-        # Документ
-        #
-
-        action = QAction("📄 Документ", self)
-        action.triggered.connect(
-            self.export_pdf_requested.emit
-        )
-        self.addAction(action)
-
-        #
-        # Печать
-        #
-
-        action = QAction("🖨 Печать", self)
-        action.triggered.connect(
-            self.print_requested.emit
-        )
-        self.addAction(action)
-
-        self.addSeparator()
-
-        #
-        # История
-        #
-
-        action = QAction("📚 История", self)
-        action.triggered.connect(
+        self.btn_history.clicked.connect(
             self.history_requested.emit
         )
-        self.addAction(action)
 
-        self.addSeparator()
-
-        #
-        # Настройки
-        #
-
-        action = QAction("⚙ Настройки", self)
-        action.triggered.connect(
+        self.btn_settings.clicked.connect(
             self.settings_requested.emit
         )
-        self.addAction(action)

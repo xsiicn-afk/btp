@@ -30,9 +30,9 @@ class Database:
 
         cursor = self.connection.cursor()
 
-        #
+        # =====================================================
         # Пользователи
-        #
+        # =====================================================
 
         cursor.execute(
             """
@@ -61,9 +61,9 @@ class Database:
             ],
         )
 
-        #
+        # =====================================================
         # Справочник моделей
-        #
+        # =====================================================
 
         cursor.execute(
             """
@@ -85,9 +85,9 @@ class Database:
             """
         )
 
-        #
+        # =====================================================
         # История сборок
-        #
+        # =====================================================
 
         cursor.execute(
             """
@@ -127,13 +127,67 @@ class Database:
             """
         )
 
+        # -----------------------------------------------------
+        # Обновление существующей таблицы builds
+        # -----------------------------------------------------
+
         self._upgrade_builds(
             cursor
         )
 
+        # =====================================================
+        # Комплектующие конкретных выпущенных компьютеров
         #
+        # Здесь будут храниться:
+        #
+        # - категория;
+        # - полное название из исходной спецификации;
+        # - количество;
+        # - серийный номер комплектующего.
+        #
+        # Один компьютер может иметь сколько угодно строк.
+        # =====================================================
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS build_items(
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                build_serial TEXT NOT NULL,
+
+                category TEXT NOT NULL,
+
+                name TEXT NOT NULL,
+
+                quantity INTEGER NOT NULL DEFAULT 1,
+
+                serial_number TEXT DEFAULT '',
+
+                FOREIGN KEY(build_serial)
+                REFERENCES builds(serial)
+
+            )
+            """
+        )
+
+        # -----------------------------------------------------
+        # Индекс для быстрого поиска комплектующих
+        # по серийному номеру компьютера.
+        # -----------------------------------------------------
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+            idx_build_items_build_serial
+
+            ON build_items(build_serial)
+            """
+        )
+
+        # =====================================================
         # Настройки
-        #
+        # =====================================================
 
         cursor.execute(
             """
@@ -156,6 +210,14 @@ class Database:
         cursor,
     ):
 
+        """
+        Обновляет существующую таблицу builds.
+
+        Старую базу удалять не требуется.
+        Недостающие столбцы добавляются
+        автоматически при запуске программы.
+        """
+
         cursor.execute(
             "PRAGMA table_info(builds)"
         )
@@ -166,6 +228,10 @@ class Database:
         }
 
         columns = {
+
+            # -------------------------------------------------
+            # Кто создал / изменил изделие
+            # -------------------------------------------------
 
             "created_by":
                 "TEXT",
@@ -179,6 +245,10 @@ class Database:
             "version":
                 "INTEGER DEFAULT 1",
 
+            # -------------------------------------------------
+            # Состояние печати
+            # -------------------------------------------------
+
             "spec_printed":
                 "INTEGER DEFAULT 0",
 
@@ -188,9 +258,25 @@ class Database:
             "sticker_printed":
                 "INTEGER DEFAULT 0",
 
+            # -------------------------------------------------
+            # Мягкое удаление
+            # -------------------------------------------------
+
             "deleted":
                 "INTEGER DEFAULT 0",
 
+            # -------------------------------------------------
+            # Новые поля
+            # -------------------------------------------------
+
+            "model_name":
+                "TEXT DEFAULT ''",
+
+            "operating_system":
+                "TEXT DEFAULT ''",
+
+            "warranty_months":
+                "INTEGER DEFAULT 36",
         }
 
         for name, sql_type in columns.items():
@@ -206,23 +292,84 @@ class Database:
                 """
             )
 
+        # =====================================================
+        # Совместимость со старой схемой печати
         #
-        # ВАЖНО:
+        # В некоторых старых версиях проекта были поля:
         #
-        # Раньше здесь находилась миграция из
-        # spec_printed_at / passport_printed_at /
-        # sticker_printed_at.
+        # spec_printed_at
+        # passport_printed_at
+        # sticker_printed_at
         #
-        # Она выполнялась при каждом запуске
-        # программы и затирала актуальные значения
-        # полей spec_printed, passport_printed и
-        # sticker_printed.
-        #
-        # Миграция больше НЕ нужна и полностью
-        # удалена.
-        #
+        # Если они существуют, переносим их состояние
+        # в новые булевы поля.
+        # =====================================================
+
+        cursor.execute(
+            "PRAGMA table_info(builds)"
+        )
+
+        existing = {
+            row["name"]
+            for row in cursor.fetchall()
+        }
+
+        if (
+            "spec_printed" in existing
+            and "spec_printed_at" in existing
+        ):
+
+            cursor.execute(
+                """
+                UPDATE builds
+
+                SET spec_printed =
+                    CASE
+                        WHEN spec_printed_at IS NULL
+                        THEN 0
+                        ELSE 1
+                    END
+                """
+            )
+
+        if (
+            "passport_printed" in existing
+            and "passport_printed_at" in existing
+        ):
+
+            cursor.execute(
+                """
+                UPDATE builds
+
+                SET passport_printed =
+                    CASE
+                        WHEN passport_printed_at IS NULL
+                        THEN 0
+                        ELSE 1
+                    END
+                """
+            )
+
+        if (
+            "sticker_printed" in existing
+            and "sticker_printed_at" in existing
+        ):
+
+            cursor.execute(
+                """
+                UPDATE builds
+
+                SET sticker_printed =
+                    CASE
+                        WHEN sticker_printed_at IS NULL
+                        THEN 0
+                        ELSE 1
+                    END
+                """
+            )
 
         self.connection.commit()
+
     # ---------------------------------------------------------
 
     def cursor(self):
