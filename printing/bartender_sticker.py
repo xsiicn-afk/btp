@@ -208,7 +208,11 @@ class BarTenderSticker:
 
         self._set_value(
             "TITLE",
-            label.title,
+            getattr(
+                label,
+                "model_name",
+                "",
+            ),
         )
 
         self._set_value(
@@ -228,11 +232,12 @@ class BarTenderSticker:
             ),
         )
 
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
 
     def print(
         self,
         label: LabelModel,
+        printer_name: str | None = None,
     ):
 
         self._open_template()
@@ -240,6 +245,17 @@ class BarTenderSticker:
         self._fill(
             label
         )
+
+        if printer_name:
+
+            try:
+
+                self._format.Printer = (
+                    printer_name
+                )
+
+            except Exception:
+                pass
 
         result = self._format.PrintOut(
             False,
