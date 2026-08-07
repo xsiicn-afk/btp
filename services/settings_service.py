@@ -15,9 +15,9 @@ class SettingsService:
 
         defaults = {
 
-            #
+            # -------------------------------------------------
             # Шаблоны документов
-            #
+            # -------------------------------------------------
 
             "template_path":
                 "resources/templates/spec_v2.xlsx",
@@ -26,20 +26,19 @@ class SettingsService:
                 "resources/templates/pass.xlsx",
 
             "sticker_template_path":
-                "resources/templates/sticker.xlsx",
+                "resources/templates/sticker.btw",
 
-            #
-            # PDF
-            #
+            # -------------------------------------------------
+            # Принтеры
+            # -------------------------------------------------
 
-            "pdf_folder":
-                "pdf",
+            "spec_printer":
+                "",
 
-            #
-            # Принтер
-            #
+            "passport_printer":
+                "",
 
-            "printer":
+            "sticker_printer":
                 "",
 
         }
@@ -50,10 +49,18 @@ class SettingsService:
 
             cursor.execute(
                 """
-                INSERT OR IGNORE INTO settings
-                (key, value)
+                INSERT OR IGNORE INTO settings(
 
-                VALUES (?, ?)
+                    key,
+                    value
+
+                )
+
+                VALUES(
+
+                    ?, ?
+
+                )
                 """,
                 (
                     key,
@@ -61,17 +68,82 @@ class SettingsService:
                 ),
             )
 
+        # ---------------------------------------------
+        # Перенос старой настройки printer
+        # ---------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT value
+
+            FROM settings
+
+            WHERE key='printer'
+            """
+        )
+
+        row = cursor.fetchone()
+
+        if row:
+
+            old_printer = (
+                row["value"]
+                or ""
+            )
+
+            if old_printer:
+
+                for key in (
+                    "spec_printer",
+                    "passport_printer",
+                    "sticker_printer",
+                ):
+
+                    cursor.execute(
+                        """
+                        UPDATE settings
+
+                        SET value=?
+
+                        WHERE key=?
+                        """,
+                        (
+                            old_printer,
+                            key,
+                        ),
+                    )
+
+                cursor.execute(
+                    """
+                    DELETE FROM settings
+
+                    WHERE key='printer'
+                    """
+                )
+
+        cursor.execute(
+            """
+            DELETE FROM settings
+
+            WHERE key='pdf_folder'
+            """
+        )
+
         self.db.commit()
 
     # ---------------------------------------------------------
 
-    def get(self, key):
+    def get(
+        self,
+        key,
+    ):
 
         cursor = self.db.cursor()
 
         cursor.execute(
             """
             SELECT value
+
             FROM settings
 
             WHERE key=?
@@ -83,10 +155,12 @@ class SettingsService:
 
         if row:
 
-            return row["value"]
+            return (
+                row["value"]
+                or ""
+            )
 
         return ""
-
     # ---------------------------------------------------------
 
     def set(
@@ -112,3 +186,63 @@ class SettingsService:
         )
 
         self.db.commit()
+
+    # ---------------------------------------------------------
+
+    def get_spec_printer(self):
+
+        return self.get(
+            "spec_printer"
+        )
+
+    # ---------------------------------------------------------
+
+    def get_passport_printer(self):
+
+        return self.get(
+            "passport_printer"
+        )
+
+    # ---------------------------------------------------------
+
+    def get_sticker_printer(self):
+
+        return self.get(
+            "sticker_printer"
+        )
+
+    # ---------------------------------------------------------
+
+    def set_spec_printer(
+        self,
+        printer,
+    ):
+
+        self.set(
+            "spec_printer",
+            printer,
+        )
+
+    # ---------------------------------------------------------
+
+    def set_passport_printer(
+        self,
+        printer,
+    ):
+
+        self.set(
+            "passport_printer",
+            printer,
+        )
+
+    # ---------------------------------------------------------
+
+    def set_sticker_printer(
+        self,
+        printer,
+    ):
+
+        self.set(
+            "sticker_printer",
+            printer,
+        )

@@ -66,7 +66,8 @@ class ExcelCom:
     ):
 
         return self.workbook.Worksheets(name)
-        # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
 
     def specification_sheet(self):
 
@@ -102,7 +103,6 @@ class ExcelCom:
 
         return sheet
 
-    
     # ---------------------------------------------------------
 
     def save_as(
@@ -117,7 +117,7 @@ class ExcelCom:
         )
 
     # ---------------------------------------------------------
-     
+
     def prepare_for_print(
         self,
         sheet,
@@ -126,9 +126,11 @@ class ExcelCom:
         """
         Подготавливает лист к печати.
 
-        Если указана область печати —
-        используется только она.
-        Иначе печатается весь лист.
+        Из шаблона сохраняются масштаб,
+        разрывы страниц и прочие настройки.
+
+        Изменяем только область печати
+        и минимальные поля страницы.
         """
 
         page = sheet.PageSetup
@@ -144,12 +146,6 @@ class ExcelCom:
         page.Zoom = False
         page.FitToPagesWide = 1
         page.FitToPagesTall = 1
-
-        page.LeftMargin = 0
-        page.RightMargin = 0
-        page.TopMargin = 0
-        page.BottomMargin = 0
-    
     # ---------------------------------------------------------
 
     def clear_range(
@@ -185,7 +181,7 @@ class ExcelCom:
 
                 pass
 
-        rng.Clear()     
+        rng.Clear()
 
     # ---------------------------------------------------------
 
@@ -197,9 +193,6 @@ class ExcelCom:
     ):
         """
         Экспортирует выбранный лист в PDF.
-
-        При необходимости ограничивает
-        область печати.
         """
 
         self.prepare_for_print(
@@ -213,6 +206,7 @@ class ExcelCom:
                 Path(filename).resolve()
             ),
         )
+
     # ---------------------------------------------------------
 
     def print(
@@ -222,9 +216,6 @@ class ExcelCom:
     ):
         """
         Печатает выбранный лист.
-
-        Если указана область печати —
-        печатается только она.
         """
 
         self.prepare_for_print(
@@ -232,4 +223,6 @@ class ExcelCom:
             print_area,
         )
 
-        sheet.PrintOut()
+        sheet.PrintOut(
+            IgnorePrintAreas=False
+        )

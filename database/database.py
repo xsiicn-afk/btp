@@ -257,7 +257,27 @@ class Database:
 
             "sticker_printed":
                 "INTEGER DEFAULT 0",
+            # -------------------------------------------------
+            # Дата и пользователь печати
+            # -------------------------------------------------
 
+            "spec_printed_at":
+                "TEXT",
+
+            "spec_printed_by":
+                "TEXT",
+
+            "passport_printed_at":
+                "TEXT",
+
+            "passport_printed_by":
+                "TEXT",
+
+            "sticker_printed_at":
+                "TEXT",
+
+            "sticker_printed_by":
+                "TEXT",
             # -------------------------------------------------
             # Мягкое удаление
             # -------------------------------------------------

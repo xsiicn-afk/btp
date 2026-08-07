@@ -36,12 +36,6 @@ class ExcelPassport:
     @staticmethod
     def coordinates() -> dict[str, str]:
 
-        #
-        # Координаты будут постепенно
-        # заполняться по мере переноса
-        # шаблона в программу.
-        #
-
         return {
 
             "TITLE": "B3",
@@ -71,7 +65,10 @@ class ExcelPassport:
             self.coordinates(),
         )
 
-        writer.write(label)
+        writer.write(
+            label
+        )
+
     # ---------------------------------------------------------
 
     def build(
@@ -132,7 +129,6 @@ class ExcelPassport:
         finally:
 
             excel.close()
-
     # ---------------------------------------------------------
 
     def print_document(
@@ -158,7 +154,9 @@ class ExcelPassport:
                     label,
                 )
 
-                sheet = excel.passport_sheet()
+                sheet = (
+                    excel.passport_sheet()
+                )
 
                 excel.print(
                     sheet,
@@ -167,3 +165,4 @@ class ExcelPassport:
             finally:
 
                 excel.close()
+                

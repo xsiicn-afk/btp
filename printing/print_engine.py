@@ -267,8 +267,8 @@ class PrintEngine:
         first_position: int = 1,
     ):
 
-        printer = self.settings.get(
-            "printer"
+        printer = (
+            self.settings.get_spec_printer()
         )
 
         for (
@@ -292,8 +292,8 @@ class PrintEngine:
         label: LabelModel,
     ):
 
-        printer = self.settings.get(
-            "printer"
+        printer = (
+            self.settings.get_passport_printer()
         )
 
         self.passport.print_document(
@@ -308,8 +308,13 @@ class PrintEngine:
         label: LabelModel,
     ):
 
+        printer = (
+            self.settings.get_sticker_printer()
+        )
+
         return self.sticker.print(
-            label
+            label,
+            printer_name=printer,
         )
 
     # ---------------------------------------------------------

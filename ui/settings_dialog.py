@@ -1,15 +1,13 @@
-from pathlib import Path
-
 from PySide6.QtPrintSupport import QPrinterInfo
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QFileDialog,
     QVBoxLayout,
 )
 
@@ -26,14 +24,14 @@ class SettingsDialog(QDialog):
 
         self.setWindowTitle("Настройки")
 
-        self.resize(650, 240)
+        self.resize(700, 260)
 
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
 
         # -------------------------------------------------
-        # Шаблон Excel
+        # Шаблон спецификации
         # -------------------------------------------------
 
         self.template = QLineEdit(
@@ -52,58 +50,69 @@ class SettingsDialog(QDialog):
         row.addWidget(btn_template)
 
         form.addRow(
-            QLabel("Шаблон Excel"),
+            QLabel("Шаблон спецификации"),
             row,
         )
 
         # -------------------------------------------------
-        # Папка PDF
+        # Принтер спецификации
         # -------------------------------------------------
 
-        self.pdf = QLineEdit(
-            self.settings.get("pdf_folder")
+        self.spec_printer = QComboBox()
+
+        # -------------------------------------------------
+        # Принтер паспорта
+        # -------------------------------------------------
+
+        self.passport_printer = QComboBox()
+
+        # -------------------------------------------------
+        # Принтер стикера
+        # -------------------------------------------------
+
+        self.sticker_printer = QComboBox()
+
+        printers = [
+            printer.printerName()
+            for printer
+            in QPrinterInfo.availablePrinters()
+        ]
+
+        self.spec_printer.addItems(printers)
+        self.passport_printer.addItems(printers)
+        self.sticker_printer.addItems(printers)
+
+        self._select_current(
+            self.spec_printer,
+            self.settings.get_spec_printer(),
         )
 
-        btn_pdf = QPushButton("...")
-
-        btn_pdf.clicked.connect(
-            self.select_pdf
+        self._select_current(
+            self.passport_printer,
+            self.settings.get_passport_printer(),
         )
 
-        row = QHBoxLayout()
-
-        row.addWidget(self.pdf)
-        row.addWidget(btn_pdf)
+        self._select_current(
+            self.sticker_printer,
+            self.settings.get_sticker_printer(),
+        )
 
         form.addRow(
-            QLabel("Папка PDF"),
-            row,
+            QLabel("Принтер спецификации"),
+            self.spec_printer,
         )
 
-        # -------------------------------------------------
-        # Принтер
-        # -------------------------------------------------
-
-        self.printer = QComboBox()
-
-        current = self.settings.get("printer")
-
-        for printer in QPrinterInfo.availablePrinters():
-
-            self.printer.addItem(printer.printerName())
-
-        index = self.printer.findText(current)
-
-        if index >= 0:
-            self.printer.setCurrentIndex(index)
+        form.addRow(
+            QLabel("Принтер паспорта"),
+            self.passport_printer,
+        )
 
         form.addRow(
-            QLabel("Принтер"),
-            self.printer,
+            QLabel("Принтер стикера"),
+            self.sticker_printer,
         )
 
         layout.addLayout(form)
-
         # -------------------------------------------------
         # Кнопки
         # -------------------------------------------------
@@ -113,8 +122,13 @@ class SettingsDialog(QDialog):
         ok = QPushButton("Сохранить")
         cancel = QPushButton("Отмена")
 
-        ok.clicked.connect(self.save)
-        cancel.clicked.connect(self.reject)
+        ok.clicked.connect(
+            self.save
+        )
+
+        cancel.clicked.connect(
+            self.reject
+        )
 
         buttons.addStretch()
 
@@ -125,31 +139,42 @@ class SettingsDialog(QDialog):
 
     # ---------------------------------------------------------
 
+    @staticmethod
+    def _select_current(
+        combo: QComboBox,
+        value: str,
+    ):
+
+        if not value:
+
+            return
+
+        index = combo.findText(
+            value
+        )
+
+        if index >= 0:
+
+            combo.setCurrentIndex(
+                index
+            )
+
+    # ---------------------------------------------------------
+
     def select_template(self):
 
         file, _ = QFileDialog.getOpenFileName(
             self,
-            "Шаблон Excel",
+            "Шаблон спецификации",
             self.template.text(),
             "Excel (*.xlsx *.xlsm)",
         )
 
         if file:
-            self.template.setText(file)
 
-    # ---------------------------------------------------------
-
-    def select_pdf(self):
-
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Папка PDF",
-            self.pdf.text() or str(Path.home()),
-        )
-
-        if folder:
-            self.pdf.setText(folder)
-
+            self.template.setText(
+                file
+            )
     # ---------------------------------------------------------
 
     def save(self):
@@ -159,14 +184,17 @@ class SettingsDialog(QDialog):
             self.template.text(),
         )
 
-        self.settings.set(
-            "pdf_folder",
-            self.pdf.text(),
+        self.settings.set_spec_printer(
+            self.spec_printer.currentText(),
         )
 
-        self.settings.set(
-            "printer",
-            self.printer.currentText(),
+        self.settings.set_passport_printer(
+            self.passport_printer.currentText(),
+        )
+
+        self.settings.set_sticker_printer(
+            self.sticker_printer.currentText(),
         )
 
         self.accept()
+        
