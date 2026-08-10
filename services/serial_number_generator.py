@@ -1,20 +1,25 @@
 import json
-from datetime import datetime
 from pathlib import Path
 
 
 class SerialNumberGenerator:
     """
-    Генератор серийных номеров.
+    Генератор производственных серийных номеров
+    и артикулов.
 
-    Формат:
-        YYMMNNN
+    Формат серийного номера:
+        2608292
+        2608293
+        2608294
 
-    Пример:
-        2607001
-        2607002
-        2607003
+    Формат артикула:
+        101259
+        101260
+        101261
     """
+
+    SERIAL_START = 2608291
+    ARTICLE_START = 101258
 
     def __init__(self):
 
@@ -23,55 +28,112 @@ class SerialNumberGenerator:
 
         self.file = self.data_dir / "serial_number.json"
 
+    # --------------------------------------------------
+
     def next(self) -> str:
 
-        counter = self._load_counter()
+        data = self._load_data()
 
-        counter += 1
+        serial = int(
+            data.get(
+                "serial",
+                self.SERIAL_START,
+            )
+        )
 
-        self._save_counter(counter)
+        serial += 1
 
-        prefix = datetime.now().strftime("%y%m")
+        data["serial"] = serial
 
-        return f"{prefix}{counter:03d}"
+        self._save_data(data)
+
+        return str(serial)
 
     # --------------------------------------------------
 
     def current(self) -> str:
 
-        counter = self._load_counter()
+        data = self._load_data()
 
-        prefix = datetime.now().strftime("%y%m")
+        serial = int(
+            data.get(
+                "serial",
+                self.SERIAL_START,
+            )
+        )
 
-        return f"{prefix}{counter:05d}"
+        return str(serial)
 
     # --------------------------------------------------
 
-    def _load_counter(self) -> int:
+    def next_article(self) -> str:
+
+        data = self._load_data()
+
+        article = int(
+            data.get(
+                "article",
+                self.ARTICLE_START,
+            )
+        )
+
+        article += 1
+
+        data["article"] = article
+
+        self._save_data(data)
+
+        return str(article)
+
+    # --------------------------------------------------
+
+    def current_article(self) -> str:
+
+        data = self._load_data()
+
+        article = int(
+            data.get(
+                "article",
+                self.ARTICLE_START,
+            )
+        )
+
+        return str(article)
+
+    # --------------------------------------------------
+
+    def _load_data(self) -> dict:
 
         if not self.file.exists():
-            return 0
+
+            return {
+                "serial": self.SERIAL_START,
+                "article": self.ARTICLE_START,
+            }
 
         try:
 
             with open(self.file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            return int(data.get("counter", 0))
+                return json.load(f)
 
         except Exception:
-            return 0
+
+            return {
+                "serial": self.SERIAL_START,
+                "article": self.ARTICLE_START,
+            }
 
     # --------------------------------------------------
 
-    def _save_counter(self, counter: int):
+    def _save_data(
+        self,
+        data: dict,
+    ):
 
         with open(self.file, "w", encoding="utf-8") as f:
 
             json.dump(
-                {
-                    "counter": counter
-                },
+                data,
                 f,
                 indent=4,
                 ensure_ascii=False,

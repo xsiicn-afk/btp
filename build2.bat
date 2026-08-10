@@ -1,66 +1,81 @@
 @echo off
 chcp 65001 > nul
+title ByTop Production Suite - Build
 
 echo =====================================
-echo   ByTop Production Suite - BUILD
+echo   ByTop Production Suite - Build
 echo =====================================
+echo.
 
-if not exist .venv (
-echo [ОШИБКА] Не найдено виртуальное окружение .venv
-pause
-exit /b 1
+REM Переход в папку скрипта
+cd /d "%~dp0"
+
+REM Активация виртуального окружения
+if exist ".venv\Scripts\activate.bat" (
+call ".venv\Scripts\activate.bat"
 )
 
-call .venv\Scripts\activate.bat
-
-echo.
-echo [1/5] Проверка PyInstaller...
+echo Проверка PyInstaller...
 python -m PyInstaller --version >nul 2>&1
 if errorlevel 1 (
-echo Устанавливаю PyInstaller...
+echo Установка PyInstaller...
 pip install pyinstaller
 )
 
 echo.
-echo [2/5] Очистка старой сборки...
-if exist build rmdir /s /q build
-if exist dist rmdir /s /q dist
-if exist ByTop.spec del /f /q ByTop.spec
-if exist Release rmdir /s /q Release
+echo Очистка старой сборки...
+if exist build rmdir /S /Q build
+if exist dist rmdir /S /Q dist
+if exist "ByTop Production Suite.spec" del /Q "ByTop Production Suite.spec"
 
 echo.
-echo [3/5] Сборка EXE...
+echo Сборка EXE...
 python -m PyInstaller ^
 --noconfirm ^
 --clean ^
---windowed ^
 --onedir ^
---name ByTop ^
+--windowed ^
+--name "ByTop Production Suite" ^
 main.py
 
 if errorlevel 1 (
 echo.
-echo [ОШИБКА] Сборка не удалась
+echo =====================================
+echo   ОШИБКА СБОРКИ
+echo =====================================
 pause
 exit /b 1
 )
 
 echo.
-echo [4/5] Копирование ресурсов...
-mkdir Release
-xcopy dist\ByTop Release\ByTop\ /e /i /y
-xcopy resources Release\ByTop\resources\ /e /i /y
-xcopy database Release\ByTop\database\ /e /i /y
-xcopy data Release\ByTop\data\ /e /i /y
+echo Копирование ресурсов...
 
-echo.
-echo [5/5] Готово
+REM Шаблоны и иконки
+if exist resources (
+xcopy resources "dist\ByTop Production Suite\resources\" /E /I /Y
+)
+
+REM База данных
+if exist database (
+xcopy database "dist\ByTop Production Suite\database" /E /I /Y >nul
+)
+
+REM Данные программы (серийные номера и т.д.)
+if exist data (
+xcopy data "dist\ByTop Production Suite\data" /E /I /Y >nul
+)
+
 echo.
 echo =====================================
 echo   СБОРКА ЗАВЕРШЕНА
 echo =====================================
 echo.
-echo Папка для тестирования:
-echo Release\ByTop
+echo Готовая папка:
+echo dist\ByTop Production Suite
+echo.
+echo ВАЖНО:
+echo - database\production.db сохранена
+echo - data\serial_number.json сохранен
+echo - resources\templates скопированы
 echo.
 pause

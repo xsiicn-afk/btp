@@ -1,3 +1,4 @@
+import sys
 import tempfile
 from pathlib import Path
 
@@ -36,11 +37,33 @@ class PrintEngine:
             passport_template
         )
 
+        if getattr(
+            sys,
+            "frozen",
+            False,
+        ):
+            project_root = (
+                Path(sys.executable)
+                .resolve()
+                .parent
+            )
+        else:
+            project_root = (
+                Path(__file__)
+                .resolve()
+                .parents[1]
+            )
+
+        sticker_template = (
+            project_root
+            / "resources"
+            / "templates"
+            / "sticker.btw"
+        )
+
         self.sticker = BarTenderSticker(
-            template=(
-                r"C:\Intel\project"
-                r"\resources\templates"
-                r"\sticker.btw"
+            template=str(
+                sticker_template
             ),
             bartender=(
                 r"C:\Program Files\Seagull"

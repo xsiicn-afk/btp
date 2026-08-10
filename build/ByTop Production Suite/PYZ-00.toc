@@ -1,4 +1,4 @@
-('C:\\Intel\\project\\build\\ByTop\\PYZ-00.pyz',
+('C:\\Intel\\project\\build\\ByTop Production Suite\\PYZ-00.pyz',
  [('PIL',
    'C:\\Intel\\project\\.venv\\Lib\\site-packages\\PIL\\__init__.py',
    'PYMODULE'),

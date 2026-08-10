@@ -1,17 +1,22 @@
+import re
+
+
 class ModelNameBuilder:
     """
-    Формирует короткое наименование компьютера.
+    Формирует производственное имя системного блока.
 
     Пример:
 
-    AMD Ryzen 5 7500F/
-    DDR5 16GB/
-    SSD NVMe 1TB/
-    GeForce RTX 5060 8GB GDDR7/
-    mATX/
-    750W/
-    Windows 11 Pro
+    Системный блок ByTop PE
+    Ci5-12400/H610/
+    DDR4 16GB 3200x2/
+    SSD 512GB M.2/
+    mATX/500W/W11Pro
     """
+
+    PREFIX = "Системный блок ByTop PE "
+
+    # --------------------------------------------------
 
     def build(
         self,
@@ -26,134 +31,196 @@ class ModelNameBuilder:
 
         parts = []
 
-        # -------------------------------------------------
-        # Процессор
-        # -------------------------------------------------
+        cpu_short = self._short_cpu(cpu)
+        if cpu_short:
+            parts.append(cpu_short)
 
-        if cpu:
+        chipset = self._short_chipset(cpu)
+        if chipset:
+            parts.append(chipset)
 
-            parts.append(
-                cpu.strip()
-            )
-
-        # -------------------------------------------------
-        # Оперативная память
-        #
-        # Частоту RAM в короткое имя
-        # компьютера не добавляем.
-        # -------------------------------------------------
-
-        ram_short = self._short_ram(
-            ram
-        )
-
+        ram_short = self._short_ram(ram)
         if ram_short:
+            parts.append(ram_short)
 
-            parts.append(
-                ram_short
-            )
+        storage_short = self._short_storage(storage)
+        if storage_short:
+            parts.append(storage_short)
 
-        # -------------------------------------------------
-        # Накопитель
-        # -------------------------------------------------
+        case_short = self._short_case(case)
+        if case_short:
+            parts.append(case_short)
 
-        if storage:
+        psu_short = self._short_psu(psu)
+        if psu_short:
+            parts.append(psu_short)
 
-            parts.append(
-                storage.strip()
-            )
+        os_short = self._short_os(operating_system)
+        if os_short:
+            parts.append(os_short)
 
-        # -------------------------------------------------
-        # Видеокарта
-        # -------------------------------------------------
-
-        if gpu:
-
-            parts.append(
-                gpu.strip()
-            )
-
-        # -------------------------------------------------
-        # Корпус
-        # -------------------------------------------------
-
-        if case:
-
-            parts.append(
-                case.strip()
-            )
-
-        # -------------------------------------------------
-        # Блок питания
-        # -------------------------------------------------
-
-        if psu:
-
-            parts.append(
-                psu.strip()
-            )
-
-        # -------------------------------------------------
-        # Операционная система
-        # -------------------------------------------------
-
-        if operating_system:
-
-            parts.append(
-                operating_system.strip()
-            )
-
-        return "/".join(
-            parts
-        )
+        return self.PREFIX + "/".join(parts)
 
     # --------------------------------------------------
 
     @staticmethod
-    def _short_ram(
-        ram: str,
-    ) -> str:
+    def _short_cpu(value: str) -> str:
 
-        if not ram:
-
+        if not value:
             return ""
 
-        parts = ram.split()
+        value = value.upper()
 
-        result = []
+        intel = re.search(
+            r"CORE\\s+I([3579])[- ]?(\\d{4,5}[A-Z]?)",
+            value,
+        )
 
-        for part in parts:
+        if intel:
+            return f"Ci{intel.group(1)}-{intel.group(2)}"
 
-            upper = part.upper()
+        amd = re.search(
+            r"RYZEN\\s+([3579])\\s+(\\d{4,5}[A-Z]?)",
+            value,
+        )
 
-            # ---------------------------------------------
-            # Частота RAM
-            #
-            # 5600MHz убираем.
-            # ---------------------------------------------
+        if amd:
+            return f"R{amd.group(1)}-{amd.group(2)}"
 
-            if upper.endswith(
-                "MHZ"
-            ):
-                continue
+        return value.strip()
 
-            # ---------------------------------------------
-            # Количество модулей
-            #
-            # (2x16GB) также убираем
-            # из короткого имени.
-            # ---------------------------------------------
+    # --------------------------------------------------
 
-            if (
-                part.startswith("(")
-                and part.endswith(")")
-            ):
-                continue
+    @staticmethod
+    def _short_chipset(value: str) -> str:
 
-            result.append(
-                part
-            )
+        if not value:
+            return ""
 
-        return " ".join(
-            result
-        ).strip()
+        upper = value.upper()
+
+        match = re.search(
+            r"\\b(H\\d{3}|B\\d{3}|Z\\d{3}|A\\d{3}|X\\d{3})",
+            upper,
+        )
+
+        return match.group(1) if match else ""
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_ram(value: str) -> str:
+
+        if not value:
+            return ""
+
+        upper = value.upper()
+
+        mem_type = "DDR5" if "DDR5" in upper else "DDR4"
+
+        size = re.search(r"(\\d+)\\s*GB", upper)
+        freq = re.search(r"(\\d{4,5})\\s*MHZ", upper)
+        count = re.search(r"X(\\d+)|\\((\\d+)X", upper)
+
+        parts = [mem_type]
+
+        if size:
+            parts.append(f"{size.group(1)}GB")
+
+        if freq:
+            parts.append(freq.group(1))
+
+        result = " ".join(parts)
+
+        if count:
+            modules = count.group(1) or count.group(2)
+            result += f"x{modules}"
+
+        return result
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_storage(value: str) -> str:
+
+        if not value:
+            return ""
+
+        upper = value.upper()
+
+        size = re.search(r"(\\d+)\\s*(TB|GB)", upper)
+
+        if "M.2" in upper or "NVME" in upper:
+            storage_type = "SSD"
+            suffix = " M.2"
+        else:
+            storage_type = "SSD"
+            suffix = ""
+
+        if size:
+            return f"{storage_type} {size.group(1)}{size.group(2)}{suffix}"
+
+        return "SSD"
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_case(value: str) -> str:
+
+        if not value:
+            return ""
+
+        upper = value.upper()
+
+        if "MICROATX" in upper or "MATX" in upper:
+            return "mATX"
+
+        if "MINI-ITX" in upper or "ITX" in upper:
+            return "ITX"
+
+        if "ATX" in upper:
+            return "ATX"
+
+        return value.strip()
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_psu(value: str) -> str:
+
+        if not value:
+            return ""
+
+        match = re.search(r"(\\d{3,4})\\s*W", value.upper())
+
+        return f"{match.group(1)}W" if match else value.strip()
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _short_os(value: str) -> str:
+
+        if not value:
+            return ""
+
+        upper = value.upper()
+
+        if "WINDOWS 11" in upper and "PRO" in upper:
+            return "W11Pro"
+
+        if "WINDOWS 10" in upper and "PRO" in upper:
+            return "W10Pro"
+
+        if "WINDOWS 11" in upper:
+            return "W11"
+
+        if "WINDOWS 10" in upper:
+            return "W10"
+
+        if "ASTRA" in upper:
+            return "Astra"
+
+        if "BASEALT" in upper or "BASE ALT" in upper:
+            return "BaseALT"
+
+        return value.strip()
