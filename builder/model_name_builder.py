@@ -69,19 +69,76 @@ class ModelNameBuilder:
         if not value:
             return ""
 
-        value = value.upper()
+        upper = value.upper()
 
-        intel = re.search(
-            r"CORE\\s+I([3579])[- ]?(\\d{4,5}[A-Z]?)",
-            value,
+        # ---------------------------------------------
+        # Intel Core Ultra 9 285 / 285K / 285KF
+        # ---------------------------------------------
+
+        ultra = re.search(
+            r"CORE\s+ULTRA\s+([3579])\s+(\d{3}[A-Z]*)",
+            upper,
         )
 
-        if intel:
-            return f"Ci{intel.group(1)}-{intel.group(2)}"
+        if ultra:
+            return f"CU{ultra.group(1)} {ultra.group(2)}"
+
+        # ---------------------------------------------
+        # Intel Core i5 12400F
+        # ---------------------------------------------
+
+        intel_i = re.search(
+            r"CORE\s+I([3579])[- ]?(\d{4,5}[A-Z]?)",
+            upper,
+        )
+
+        if intel_i:
+            return f"Ci{intel_i.group(1)}-{intel_i.group(2)}"
+
+        # ---------------------------------------------
+        # Intel Core 5 12400F
+        # Intel Core 7 14700K
+        # ---------------------------------------------
+
+        intel_new = re.search(
+            r"CORE\s+([3579])\s+(\d{4,5}[A-Z]?)",
+            upper,
+        )
+
+        if intel_new:
+            return f"Ci{intel_new.group(1)}-{intel_new.group(2)}"
+
+        # ---------------------------------------------
+        # Intel Pentium G4400 / G6405 / G7400
+        # ---------------------------------------------
+
+        pentium = re.search(
+            r"PENTIUM\s+([A-Z]\d{4,5}[A-Z]?)",
+            upper,
+        )
+
+        if pentium:
+            return f"Intel {pentium.group(1)}"
+
+        # ---------------------------------------------
+        # Intel Celeron G5905
+        # ---------------------------------------------
+
+        celeron = re.search(
+            r"CELERON\s+([A-Z]?\d{4,5}[A-Z]?)",
+            upper,
+        )
+
+        if celeron:
+            return f"Intel {celeron.group(1)}"
+
+        # ---------------------------------------------
+        # AMD Ryzen 5 5600 / 7500F
+        # ---------------------------------------------
 
         amd = re.search(
-            r"RYZEN\\s+([3579])\\s+(\\d{4,5}[A-Z]?)",
-            value,
+            r"RYZEN\s+([3579])\s+(\d{4,5}[A-Z]?)",
+            upper,
         )
 
         if amd:
@@ -116,25 +173,44 @@ class ModelNameBuilder:
 
         upper = value.upper()
 
+        # Тип памяти
         mem_type = "DDR5" if "DDR5" in upper else "DDR4"
 
-        size = re.search(r"(\\d+)\\s*GB", upper)
-        freq = re.search(r"(\\d{4,5})\\s*MHZ", upper)
-        count = re.search(r"X(\\d+)|\\((\\d+)X", upper)
+        # Объём одного модуля
+        size_match = re.search(r"(\d+)\s*GB", upper)
 
-        parts = [mem_type]
+        # Частота
+        freq_match = re.search(r"(\d{4,5})\s*MHZ", upper)
 
-        if size:
-            parts.append(f"{size.group(1)}GB")
+        # Количество модулей
+        count_match = re.search(
+            r"В КОЛИЧЕСТВЕ\s*(\d+)\s*ШТ|X(\d+)|(\d+)X\d+GB",
+            upper,
+        )
 
-        if freq:
-            parts.append(freq.group(1))
+        if not size_match:
+            return mem_type
 
-        result = " ".join(parts)
+        size = int(size_match.group(1))
 
-        if count:
-            modules = count.group(1) or count.group(2)
-            result += f"x{modules}"
+        count = 1
+
+        if count_match:
+            count = int(
+                next(
+                    g for g in count_match.groups() if g
+                )
+            )
+
+        total = size * count
+
+        result = f"{mem_type} {total}GB"
+
+        if freq_match:
+            result += f" {freq_match.group(1)}"
+
+        if count > 1:
+            result += f"x{count}"
 
         return result
 
@@ -148,19 +224,26 @@ class ModelNameBuilder:
 
         upper = value.upper()
 
-        size = re.search(r"(\\d+)\\s*(TB|GB)", upper)
+        # Все найденные объёмы
+        matches = re.findall(r"(\d+)\s*(TB|GB)", upper)
 
-        if "M.2" in upper or "NVME" in upper:
-            storage_type = "SSD"
-            suffix = " M.2"
-        else:
-            storage_type = "SSD"
-            suffix = ""
+        if not matches:
+            return "SSD"
 
-        if size:
-            return f"{storage_type} {size.group(1)}{size.group(2)}{suffix}"
+        # Берём первый найденный объём
+        size, unit = matches[0]
 
-        return "SSD"
+        # Если объём в гигабайтах и кратен 1024 — переводим в TB
+        if unit == "GB":
+            gb = int(size)
+
+            if gb % 1024 == 0 and gb >= 1024:
+                size = str(gb // 1024)
+                unit = "TB"
+
+        suffix = " M.2" if ("M.2" in upper or "NVME" in upper) else ""
+
+        return f"SSD {size}{unit}{suffix}"
 
     # --------------------------------------------------
 

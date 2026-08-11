@@ -1,18 +1,15 @@
 from PySide6.QtPrintSupport import QPrinterInfo
 from PySide6.QtWidgets import (
-    QComboBox,
-    QDialog,
-    QFormLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QFileDialog,
-    QVBoxLayout,
+QComboBox,
+QDialog,
+QFormLayout,
+QHBoxLayout,
+QLabel,
+QPushButton,
+QVBoxLayout,
 )
 
 from services.settings_service import SettingsService
-
 
 class SettingsDialog(QDialog):
 
@@ -24,35 +21,11 @@ class SettingsDialog(QDialog):
 
         self.setWindowTitle("Настройки")
 
-        self.resize(700, 260)
+        self.resize(520, 180)
 
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
-
-        # -------------------------------------------------
-        # Шаблон спецификации
-        # -------------------------------------------------
-
-        self.template = QLineEdit(
-            self.settings.get("template_path")
-        )
-
-        btn_template = QPushButton("...")
-
-        btn_template.clicked.connect(
-            self.select_template
-        )
-
-        row = QHBoxLayout()
-
-        row.addWidget(self.template)
-        row.addWidget(btn_template)
-
-        form.addRow(
-            QLabel("Шаблон спецификации"),
-            row,
-        )
 
         # -------------------------------------------------
         # Принтер спецификации
@@ -113,6 +86,7 @@ class SettingsDialog(QDialog):
         )
 
         layout.addLayout(form)
+
         # -------------------------------------------------
         # Кнопки
         # -------------------------------------------------
@@ -122,16 +96,10 @@ class SettingsDialog(QDialog):
         ok = QPushButton("Сохранить")
         cancel = QPushButton("Отмена")
 
-        ok.clicked.connect(
-            self.save
-        )
-
-        cancel.clicked.connect(
-            self.reject
-        )
+        ok.clicked.connect(self.save)
+        cancel.clicked.connect(self.reject)
 
         buttons.addStretch()
-
         buttons.addWidget(ok)
         buttons.addWidget(cancel)
 
@@ -146,43 +114,16 @@ class SettingsDialog(QDialog):
     ):
 
         if not value:
-
             return
 
-        index = combo.findText(
-            value
-        )
+        index = combo.findText(value)
 
         if index >= 0:
+            combo.setCurrentIndex(index)
 
-            combo.setCurrentIndex(
-                index
-            )
-
-    # ---------------------------------------------------------
-
-    def select_template(self):
-
-        file, _ = QFileDialog.getOpenFileName(
-            self,
-            "Шаблон спецификации",
-            self.template.text(),
-            "Excel (*.xlsx *.xlsm)",
-        )
-
-        if file:
-
-            self.template.setText(
-                file
-            )
     # ---------------------------------------------------------
 
     def save(self):
-
-        self.settings.set(
-            "template_path",
-            self.template.text(),
-        )
 
         self.settings.set_spec_printer(
             self.spec_printer.currentText(),
@@ -197,4 +138,3 @@ class SettingsDialog(QDialog):
         )
 
         self.accept()
-        
