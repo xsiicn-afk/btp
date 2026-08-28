@@ -7,11 +7,6 @@ from models.item import Item
 class LabelModel:
     """
     Итоговая модель созданного изделия.
-
-    Основным названием модели является model_name.
-
-    Свойства title и internal_name оставлены
-    для совместимости со старой системой печати.
     """
 
     # =====================================================
@@ -23,6 +18,9 @@ class LabelModel:
     article: str = ""
 
     article_code: int = 0
+
+    # Новый код продукции
+    product_code: str = ""
 
     date: str = ""
 
@@ -61,20 +59,12 @@ class LabelModel:
     operating_system: str = ""
 
     # =====================================================
-    # Исходные комплектующие изделия
+    # Комплектующие
     # =====================================================
 
-    items: list[Item] = field(
-        default_factory=list
-    )
+    items: list[Item] = field(default_factory=list)
 
-    # =====================================================
-    # Дополнительные позиции
-    # =====================================================
-
-    additional_items: list[Item] = field(
-        default_factory=list
-    )
+    additional_items: list[Item] = field(default_factory=list)
 
     # =====================================================
     # Служебные данные
@@ -91,37 +81,21 @@ class LabelModel:
     sticker_printed: bool = False
 
     # =====================================================
-    # Совместимость со старой системой
+    # Совместимость
     # =====================================================
 
     @property
     def title(self) -> str:
-
         return self.model_name
 
     @title.setter
-    def title(
-        self,
-        value: str,
-    ):
-
-        self.model_name = (
-            value or ""
-        )
-
-    # ---------------------------------------------------------
+    def title(self, value: str):
+        self.model_name = value or ""
 
     @property
     def internal_name(self) -> str:
-
         return self.model_name
 
     @internal_name.setter
-    def internal_name(
-        self,
-        value: str,
-    ):
-
-        self.model_name = (
-            value or ""
-        )
+    def internal_name(self, value: str):
+        self.model_name = value or ""

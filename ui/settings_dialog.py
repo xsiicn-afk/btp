@@ -1,15 +1,18 @@
 from PySide6.QtPrintSupport import QPrinterInfo
+
 from PySide6.QtWidgets import (
-QComboBox,
-QDialog,
-QFormLayout,
-QHBoxLayout,
-QLabel,
-QPushButton,
-QVBoxLayout,
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
 )
 
 from services.settings_service import SettingsService
+from services.template_service import TemplateService
+
 
 class SettingsDialog(QDialog):
 
@@ -18,37 +21,27 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
 
         self.settings = SettingsService()
+        self.templates = TemplateService()
 
         self.setWindowTitle("Настройки")
 
-        self.resize(520, 180)
+        self.resize(520, 240)
 
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
 
-        # -------------------------------------------------
-        # Принтер спецификации
-        # -------------------------------------------------
+        # =================================================
+        # Принтеры
+        # =================================================
 
         self.spec_printer = QComboBox()
-
-        # -------------------------------------------------
-        # Принтер паспорта
-        # -------------------------------------------------
-
         self.passport_printer = QComboBox()
-
-        # -------------------------------------------------
-        # Принтер стикера
-        # -------------------------------------------------
-
         self.sticker_printer = QComboBox()
 
         printers = [
             printer.printerName()
-            for printer
-            in QPrinterInfo.availablePrinters()
+            for printer in QPrinterInfo.availablePrinters()
         ]
 
         self.spec_printer.addItems(printers)
@@ -85,11 +78,49 @@ class SettingsDialog(QDialog):
             self.sticker_printer,
         )
 
+        # =================================================
+        # Профили шаблонов
+        # =================================================
+
+        self.template_profile = QComboBox()
+
+        # Храним соответствие:
+        # отображаемое имя -> имя папки.
+        self.profile_map = {}
+
+        current_folder = (
+            self.settings.get_template_profile()
+        )
+
+        current_index = 0
+
+        for index, folder in enumerate(
+            self.templates.profiles()
+        ):
+
+            info = self.templates.profile_info(folder)
+
+            display = info["name"]
+
+            self.profile_map[display] = folder
+
+            self.template_profile.addItem(display)
+
+            if folder == current_folder:
+                current_index = index
+
+        self.template_profile.setCurrentIndex(current_index)
+
+        form.addRow(
+            QLabel("Профиль шаблонов"),
+            self.template_profile,
+        )
+
         layout.addLayout(form)
 
-        # -------------------------------------------------
+        # =================================================
         # Кнопки
-        # -------------------------------------------------
+        # =================================================
 
         buttons = QHBoxLayout()
 
@@ -135,6 +166,17 @@ class SettingsDialog(QDialog):
 
         self.settings.set_sticker_printer(
             self.sticker_printer.currentText(),
+        )
+
+        display = self.template_profile.currentText()
+
+        folder = self.profile_map.get(
+            display,
+            display,
+        )
+
+        self.settings.set_template_profile(
+            folder,
         )
 
         self.accept()

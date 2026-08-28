@@ -1,5 +1,6 @@
 import re
 
+from services.template_service import TemplateService
 
 class ModelNameBuilder:
     """
@@ -14,8 +15,7 @@ class ModelNameBuilder:
     mATX/500W/W11Pro
     """
 
-    PREFIX = "Системный блок ByTop PE "
-
+    
     # --------------------------------------------------
 
     def build(
@@ -47,6 +47,10 @@ class ModelNameBuilder:
         if storage_short:
             parts.append(storage_short)
 
+        gpu_short = self._short_gpu(gpu)
+        if gpu_short:
+            parts.append(gpu_short)
+        
         case_short = self._short_case(case)
         if case_short:
             parts.append(case_short)
@@ -59,7 +63,14 @@ class ModelNameBuilder:
         if os_short:
             parts.append(os_short)
 
-        return self.PREFIX + "/".join(parts)
+        prefix = TemplateService().model_prefix().strip()
+
+        result = "/".join(parts)
+
+        if not result:
+            return prefix
+
+        return f"{prefix} {result}"
 
     # --------------------------------------------------
 
@@ -176,41 +187,27 @@ class ModelNameBuilder:
         # Тип памяти
         mem_type = "DDR5" if "DDR5" in upper else "DDR4"
 
-        # Объём одного модуля
-        size_match = re.search(r"(\d+)\s*GB", upper)
-
-        # Частота
-        freq_match = re.search(r"(\d{4,5})\s*MHZ", upper)
-
-        # Количество модулей
-        count_match = re.search(
-            r"В КОЛИЧЕСТВЕ\s*(\d+)\s*ШТ|X(\d+)|(\d+)X\d+GB",
+        # Берём первый указанный общий объём
+        size_match = re.search(
+            r"(\d+)\s*(?:GB|ГБ)",
             upper,
         )
 
         if not size_match:
             return mem_type
 
-        size = int(size_match.group(1))
+        total = int(size_match.group(1))
 
-        count = 1
-
-        if count_match:
-            count = int(
-                next(
-                    g for g in count_match.groups() if g
-                )
-            )
-
-        total = size * count
+        # Частота
+        freq_match = re.search(
+            r"(\d{4,5})\s*(?:MHZ|МГЦ)",
+            upper,
+        )
 
         result = f"{mem_type} {total}GB"
 
         if freq_match:
             result += f" {freq_match.group(1)}"
-
-        if count > 1:
-            result += f"x{count}"
 
         return result
 
@@ -245,6 +242,78 @@ class ModelNameBuilder:
 
         return f"SSD {size}{unit}{suffix}"
 
+# --------------------------------------------------
+
+    @staticmethod
+    def _short_gpu(value: str) -> str:
+
+        if not value:
+            return ""
+
+        upper = value.upper()
+
+        # RTX 5070 / RTX 5070 Ti / RTX 4060 Super
+        rtx = re.search(
+            r"RTX\s*(\d{4})(?:\s*(TI|SUPER))?",
+            upper,
+        )
+
+        if rtx:
+
+            model = rtx.group(1)
+            suffix = rtx.group(2) or ""
+
+            name = f"RTX{model}{suffix}"
+
+            vram = re.search(r"(\d+)\s*GB", upper)
+
+            if vram:
+                return f"{name} {vram.group(1)}Gb"
+
+            return name
+
+        # GTX 1660 / 1650 Super
+        gtx = re.search(
+            r"GTX\s*(\d{3,4})(?:\s*(TI|SUPER))?",
+            upper,
+        )
+
+        if gtx:
+
+            model = gtx.group(1)
+            suffix = gtx.group(2) or ""
+
+            name = f"GTX{model}{suffix}"
+
+            vram = re.search(r"(\d+)\s*GB", upper)
+
+            if vram:
+                return f"{name} {vram.group(1)}Gb"
+
+            return name
+
+        # Radeon RX 7800 XT / RX 7600
+        rx = re.search(
+            r"RX\s*(\d{4})(?:\s*(XT|XTX))?",
+            upper,
+        )
+
+        if rx:
+
+            model = rx.group(1)
+            suffix = rx.group(2) or ""
+
+            name = f"RX{model}{suffix}"
+
+            vram = re.search(r"(\d+)\s*GB", upper)
+
+            if vram:
+                return f"{name} {vram.group(1)}Gb"
+
+            return name
+
+        return ""
+    
     # --------------------------------------------------
 
     @staticmethod

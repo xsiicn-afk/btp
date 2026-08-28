@@ -1,17 +1,19 @@
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
 )
 
-from printing.print_engine import PrintEngine
-
 
 class SpecificationPrintDialog(QDialog):
+    """
+    Диалог печати спецификации.
+
+    Новая схема:
+        одно изделие = одна этикетка 100×150.
+    """
 
     def __init__(
         self,
@@ -22,99 +24,36 @@ class SpecificationPrintDialog(QDialog):
 
         self.labels_count = labels_count
 
-        self.setWindowTitle(
-            "Печать спецификаций"
-        )
-
+        self.setWindowTitle("Печать спецификаций")
         self.setFixedWidth(360)
 
         layout = QVBoxLayout(self)
 
-        form = QFormLayout()
-
-        self.labels_label = QLabel(
-            str(labels_count)
+        layout.addWidget(
+            QLabel(
+                f"Будет распечатано спецификаций: {labels_count}"
+            )
         )
 
-        form.addRow(
-            "Спецификаций к печати",
-            self.labels_label,
+        layout.addWidget(
+            QLabel(
+                "Формат: 100×150 мм"
+            )
         )
 
-        self.position = QComboBox()
-
-        for i in range(1, 5):
-            self.position.addItem(str(i), i)
-
-        self.position.currentIndexChanged.connect(
-            self.update_sheet_count
-        )
-
-        form.addRow(
-            "Начинать с позиции",
-            self.position,
-        )
-
-        self.sheets_label = QLabel()
-
-        form.addRow(
-            "Листов будет напечатано",
-            self.sheets_label,
-        )
-
-        layout.addLayout(form)
+        layout.addStretch()
 
         buttons = QHBoxLayout()
 
         buttons.addStretch()
 
-        self.ok = QPushButton(
-            "Печатать"
-        )
+        ok = QPushButton("Печатать")
+        cancel = QPushButton("Отмена")
 
-        self.cancel = QPushButton(
-            "Отмена"
-        )
+        ok.clicked.connect(self.accept)
+        cancel.clicked.connect(self.reject)
 
-        self.ok.clicked.connect(
-            self.accept
-        )
-
-        self.cancel.clicked.connect(
-            self.reject
-        )
-
-        buttons.addWidget(self.ok)
-        buttons.addWidget(self.cancel)
+        buttons.addWidget(ok)
+        buttons.addWidget(cancel)
 
         layout.addLayout(buttons)
-
-        self.update_sheet_count()
-
-    # ---------------------------------------------------------
-
-    def update_sheet_count(self):
-
-        pages = PrintEngine.pages_required(
-            self.labels_count,
-            self.first_position(),
-        )
-
-        self.sheets_label.setText(
-            str(pages)
-        )
-
-    # ---------------------------------------------------------
-
-    def first_position(self) -> int:
-
-        return self.position.currentData()
-
-    # ---------------------------------------------------------
-
-    def sheet_count(self) -> int:
-
-        return PrintEngine.pages_required(
-            self.labels_count,
-            self.first_position(),
-        )

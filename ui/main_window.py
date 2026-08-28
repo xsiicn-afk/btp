@@ -8,11 +8,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QInputDialog,
     QPlainTextEdit,
     QSpinBox,
     QSplitter,
     QVBoxLayout,
     QWidget,
+    QInputDialog,
 )
 
 from parser.basic_parser import BasicParser
@@ -466,18 +468,9 @@ class MainWindow(QMainWindow):
 
     def create_new_build(self):
         """
-        Создаёт очередной компьютер.
+        Создаёт одно или несколько изделий подряд.
 
-        После успешного создания:
-
-        - исходный текст остаётся;
-        - количества остаются;
-        - название остаётся;
-        - гарантия остаётся;
-        - серийники комплектующих очищаются.
-
-        Поэтому можно сразу собирать следующий
-        компьютер такой же конфигурации.
+        Перед созданием запрашивает количество изделий.
         """
 
         if not self.current_configuration.items:
@@ -494,17 +487,29 @@ class MainWindow(QMainWindow):
             return
 
         # -------------------------------------------------
-        # Переносим в Configuration актуальные
-        # количества и серийники из таблицы.
+        # Запрашиваем количество изделий
+        # -------------------------------------------------
+
+        quantity, ok = QInputDialog.getInt(
+            self,
+            "Создание изделий",
+            "Количество изделий:",
+            1,
+            1,
+            100,
+            1,
+        )
+
+        if not ok:
+            return
+
+        # -------------------------------------------------
+        # Переносим актуальные данные из таблицы
         # -------------------------------------------------
 
         self.components_table.apply_to_configuration(
             self.current_configuration
         )
-
-        # -------------------------------------------------
-        # Забираем текущее название.
-        # -------------------------------------------------
 
         manual_model_name = (
             self.model_name_preview
@@ -512,28 +517,34 @@ class MainWindow(QMainWindow):
             .strip()
         )
 
-        # -------------------------------------------------
-        # Текущий срок гарантии
-        # -------------------------------------------------
+        warranty_months = self.warranty_spin.value()
 
-        warranty_months = (
-            self.warranty_spin.value()
-        )
+        created_serials = []
 
         # -------------------------------------------------
-        # Создание изделия
+        # Создаём серию изделий
         # -------------------------------------------------
 
-        self.current_label = (
-            self.build_service.create(
+        for _ in range(quantity):
+
+            label = self.build_service.create(
                 self.current_configuration,
                 manual_model_name,
                 warranty_months,
             )
-        )
+
+            created_serials.append(label.serial)
+
+            self.current_label = label
 
         # -------------------------------------------------
-        # Показываем окончательное имя
+        # Обновляем историю
+        # -------------------------------------------------
+
+        self.history_window.panel.refresh()
+
+        # -------------------------------------------------
+        # Оставляем последнее имя в редакторе
         # -------------------------------------------------
 
         self.model_name_preview.setPlainText(
@@ -542,31 +553,11 @@ class MainWindow(QMainWindow):
         )
 
         # -------------------------------------------------
-        # Обновляем историю
-        # -------------------------------------------------
-
-        self.history_window.panel.refresh()
-
-        created_serial = (
-            self.current_label.serial
-        )
-
-        # -------------------------------------------------
-        # Подготавливаем Configuration
-        # для следующего одинакового ПК.
-        #
-        # Очищаем ТОЛЬКО серийники.
-        #
-        # Количество, название и гарантия остаются.
+        # Очищаем только серийники комплектующих
         # -------------------------------------------------
 
         for item in self.current_configuration.items:
-
             item.serial_number = ""
-
-        # -------------------------------------------------
-        # Очищаем серийники в таблице
-        # -------------------------------------------------
 
         self.components_table.clear_serial_numbers()
 
@@ -574,17 +565,33 @@ class MainWindow(QMainWindow):
         # Сообщение
         # -------------------------------------------------
 
+        if quantity == 1:
+
+            text = (
+                "Создано изделие № "
+                f"{created_serials[0]}\\n\\n"
+                "Гарантия: "
+                f"{warranty_months} мес.\\n\\n"
+                "Серийные номера комплектующих "
+                "очищены для следующей сборки."
+            )
+
+        else:
+
+            text = (
+                f"Создано изделий: {quantity}\\n\\n"
+                f"Первый номер: {created_serials[0]}\\n"
+                f"Последний номер: {created_serials[-1]}\\n\\n"
+                "Гарантия: "
+                f"{warranty_months} мес.\\n\\n"
+                "Серийные номера комплектующих "
+                "очищены для следующей сборки."
+            )
+
         QMessageBox.information(
             self,
             "Готово",
-            (
-                "Создано изделие № "
-                f"{created_serial}\n\n"
-                "Гарантия: "
-                f"{warranty_months} мес.\n\n"
-                "Серийные номера комплектующих "
-                "очищены для следующей сборки."
-            ),
+            text,
         )
 
         # -------------------------------------------------

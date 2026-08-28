@@ -5,6 +5,7 @@ import pythoncom
 import win32com.client
 
 from models.label_model import LabelModel
+from services.template_service import TemplateService
 
 
 class BarTenderSticker:
@@ -15,9 +16,12 @@ class BarTenderSticker:
 
     def __init__(
         self,
-        template: str,
+        template: str | None = None,
         bartender: str | None = None,
     ):
+
+        if not template:
+            template = TemplateService().sticker()
 
         self.template = Path(template)
 
@@ -33,9 +37,15 @@ class BarTenderSticker:
 
         if not self.template.exists():
 
+            profile = (
+                TemplateService()
+                .current_profile()
+            )
+
             raise FileNotFoundError(
-                f"Не найден шаблон BarTender: "
-                f"{self.template}"
+                "В профиле шаблонов "
+                f'"{profile}" отсутствует файл '
+                f"{self.template.name}"
             )
 
     # ---------------------------------------------------------
@@ -46,7 +56,6 @@ class BarTenderSticker:
             return
 
         pythoncom.CoInitialize()
-
         self._com_initialized = True
 
     # ---------------------------------------------------------
@@ -57,11 +66,8 @@ class BarTenderSticker:
             return
 
         try:
-
             pythoncom.CoUninitialize()
-
         finally:
-
             self._com_initialized = False
 
     # ---------------------------------------------------------
@@ -75,10 +81,8 @@ class BarTenderSticker:
 
         try:
 
-            self._app = (
-                win32com.client.Dispatch(
-                    "BarTender.Application"
-                )
+            self._app = win32com.client.Dispatch(
+                "BarTender.Application"
             )
 
             self._app.Visible = False
@@ -86,9 +90,7 @@ class BarTenderSticker:
         except Exception:
 
             self._app = None
-
             self._uninitialize_com()
-
             raise
 
     # ---------------------------------------------------------
@@ -104,28 +106,16 @@ class BarTenderSticker:
             self.template.resolve()
         )
 
-        try:
-
-            self._format = (
-                self._app.Formats.Open(
-                    template_path,
-                    False,
-                    "",
-                )
-            )
-
-        except Exception:
-
-            self._format = None
-
-            raise
+        self._format = self._app.Formats.Open(
+            template_path,
+            False,
+            "",
+        )
 
     # ---------------------------------------------------------
 
     @staticmethod
-    def _text(
-        value,
-    ) -> str:
+    def _text(value) -> str:
 
         if value is None:
             return ""
@@ -135,19 +125,7 @@ class BarTenderSticker:
     # ---------------------------------------------------------
 
     @staticmethod
-    def _format_date(
-        value,
-    ) -> str:
-        """
-        Преобразует дату производства
-        в формат месяц/год для наклейки.
-
-        Например:
-
-            29.07.2026 -> 07.2026
-            2026-07-29 -> 07.2026
-            29/07/2026 -> 07.2026
-        """
+    def _format_date(value) -> str:
 
         if value is None:
             return ""
@@ -173,12 +151,10 @@ class BarTenderSticker:
                     date_format,
                 )
 
-                return parsed.strftime(
-                    "%m.%Y"
-                )
+                return parsed.strftime("%m.%Y")
 
             except ValueError:
-                continue
+                pass
 
         return value
 
@@ -190,13 +166,9 @@ class BarTenderSticker:
         value,
     ):
 
-        value = self._text(
-            value
-        )
-
         self._format.SetNamedSubStringValue(
             name,
-            value,
+            self._text(value),
         )
 
     # ---------------------------------------------------------
@@ -208,11 +180,7 @@ class BarTenderSticker:
 
         self._set_value(
             "TITLE",
-            getattr(
-                label,
-                "model_name",
-                "",
-            ),
+            getattr(label, "model_name", ""),
         )
 
         self._set_value(
@@ -220,19 +188,19 @@ class BarTenderSticker:
             label.serial,
         )
 
+        # ARTICLE больше не существует в шаблоне.
+
         self._set_value(
-            "ARTICLE",
-            label.article_code,
+            "CODE",
+            getattr(label, "product_code", ""),
         )
 
         self._set_value(
             "DATE",
-            self._format_date(
-                label.date
-            ),
+            self._format_date(label.date),
         )
 
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
 
     def print(
         self,
@@ -240,29 +208,36 @@ class BarTenderSticker:
         printer_name: str | None = None,
     ):
 
+        current_template = TemplateService().sticker()
+
+        if Path(current_template) != self.template:
+
+            if self._format is not None:
+
+                try:
+                    self._format.Close(1)
+                except Exception:
+                    pass
+
+                self._format = None
+
+            self.template = Path(current_template)
+
         self._open_template()
 
-        self._fill(
-            label
-        )
+        self._fill(label)
 
         if printer_name:
 
             try:
-
-                self._format.Printer = (
-                    printer_name
-                )
-
+                self._format.Printer = printer_name
             except Exception:
                 pass
 
-        result = self._format.PrintOut(
+        return self._format.PrintOut(
             False,
             False,
         )
-
-        return result
 
     # ---------------------------------------------------------
 
@@ -271,31 +246,19 @@ class BarTenderSticker:
         if self._format is not None:
 
             try:
-
-                self._format.Close(
-                    1,
-                )
-
+                self._format.Close(1)
             except Exception:
                 pass
-
             finally:
-
                 self._format = None
 
         if self._app is not None:
 
             try:
-
-                self._app.Quit(
-                    1,
-                )
-
+                self._app.Quit(1)
             except Exception:
                 pass
-
             finally:
-
                 self._app = None
 
         self._uninitialize_com()
@@ -303,7 +266,6 @@ class BarTenderSticker:
     # ---------------------------------------------------------
 
     def __enter__(self):
-
         return self
 
     # ---------------------------------------------------------
@@ -314,7 +276,6 @@ class BarTenderSticker:
         exc_value,
         traceback,
     ):
-
         self.close()
 
     # ---------------------------------------------------------
@@ -322,8 +283,6 @@ class BarTenderSticker:
     def __del__(self):
 
         try:
-
             self.close()
-
         except Exception:
             pass

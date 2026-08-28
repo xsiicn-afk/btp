@@ -1,239 +1,176 @@
 from pathlib import Path
 import tempfile
+from datetime import datetime
 
-import barcode
-from barcode.writer import ImageWriter
+import qrcode
+from openpyxl.drawing.image import Image as XLImage
+
 
 class SpecificationWriter:
-    """
-    Заполняет один блок производственной спецификации
-    и добавляет штрихкод серийного номера.
-    """
-    # ---------------------------------------------------------
 
-    def __init__(
-        self,
-        sheet=None,
-        coordinates=None,
-    ):
+    MONTHS = {
+        1: "янв", 2: "фев", 3: "мар",
+        4: "апр", 5: "май", 6: "июн",
+        7: "июл", 8: "авг", 9: "сен",
+        10: "окт", 11: "ноя", 12: "дек",
+    }
 
+    def __init__(self, sheet):
         self.sheet = sheet
-        self.coords = coordinates or {}
 
     # ---------------------------------------------------------
 
-    def write(
-        self,
-        label,
-    ):
+    def _cell(self, address):
+
+        cell = self.sheet[address]
+
+        if cell.__class__.__name__ != "MergedCell":
+            return cell
+
+        for merged in self.sheet.merged_cells.ranges:
+
+            if address in merged:
+                return self.sheet.cell(
+                    merged.min_row,
+                    merged.min_col,
+                )
+
+        return cell
+
+    # ---------------------------------------------------------
+
+    def write(self, label):
 
         self._write_header(label)
         self._write_components(label)
 
     # ---------------------------------------------------------
 
-    def _write_header(
-        self,
-        label,
-    ):
+    def _format_date(self, value):
 
-        c = self.coords
+        if not value:
+            return ""
 
-        self.sheet.Range(c["TITLE"]).Value = label.title
-        self.sheet.Range(c["SERIAL"]).Value = label.serial
-        self.sheet.Range(c["MODEL"]).Value = label.internal_name
-        self.sheet.Range(c["ARTICLE"]).Value = label.article_code
+        for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
 
-        self.sheet.Range(c["DATE"]).Value = (
-            f"ДАТА ПРОИЗВОДСТВА: {label.date}"
-        )
+            try:
+                dt = datetime.strptime(value, fmt)
+                return f"{self.MONTHS[dt.month]} {dt.year}"
+            except ValueError:
+                pass
 
-        # ---------------------------------------------
-        # Штрихкод серийного номера
-        # ---------------------------------------------
-
-        self._insert_serial_barcode(label.serial)
+        return value
 
     # ---------------------------------------------------------
 
-    def _insert_serial_barcode(
+    def _write_header(self, label):
+
+        self._cell("A1").value = label.model_name
+
+        self._cell("C4").value = str(label.serial)
+
+        self._cell("M4").value = label.article_code
+
+        self._cell("W4").value = label.product_code or ""
+
+        self._cell("AA6").value = self._format_date(label.date)
+
+        # Шаблон открывается заново при каждой печати,
+        # поэтому ничего не очищаем — заводские картинки
+        # останутся на месте.
+
+        self._insert_qr(
+            str(label.serial),
+            "H4",
+        )
+
+        if label.product_code:
+
+            self._insert_qr(
+                str(label.product_code),
+                "R4",
+            )
+
+    # ---------------------------------------------------------
+
+    def _insert_qr(
         self,
-        serial: str,
+        value,
+        cell,
     ):
 
-        if not serial:
+        if not value:
             return
 
-        c = self.coords
-
-        # -------------------------------------------------
-        # Определяем позицию штрихкода по блоку спецификации
-        # -------------------------------------------------
-
-        first_component = c.get("FIRST_COMPONENT", "A1")
-
-        row = int(
-            "".join(filter(str.isdigit, first_component))
-    )
-
-        title_col = "".join(
-            filter(str.isalpha, c.get("TITLE", "A1"))
-    )
-
-        # Верхний левый блок
-        if row < 20 and title_col == "A":
-            barcode_cell_name = "H4"
-
-        # Верхний правый блок
-        elif row < 20 and title_col == "AE":
-            barcode_cell_name = "AL4"
-
-        # Нижний левый блок
-        elif row >= 20 and title_col == "A":
-            barcode_cell_name = "H31"
-
-        # Нижний правый блок
-        else:
-            barcode_cell_name = "AL31"
-
-        barcode_cell = self.sheet.Range(barcode_cell_name)
-
-        # -------------------------------------------------
-        # Удаляем старые штрихкоды
-        # -------------------------------------------------
-
-        for shape in list(self.sheet.Shapes):
-
-            try:
-                if shape.Name.startswith("SN_BARCODE_"):
-                    shape.Delete()
-            except Exception:
-                pass
-
-        # -------------------------------------------------
-        # Генерируем PNG Code128
-        # -------------------------------------------------
-
-        temp_dir = Path(tempfile.gettempdir()) / "ByTopBarcode"
+        temp_dir = Path(tempfile.gettempdir()) / "ByTopQR"
         temp_dir.mkdir(exist_ok=True)
 
-        barcode_path = temp_dir / f"{serial}.png"
+        qr_path = temp_dir / f"{value}.png"
 
-        code128 = barcode.get(
-            "code128",
-            serial,
-            writer=ImageWriter(),
-    )
+        qr = qrcode.QRCode(
+            version=2,
+            border=1,
+            box_size=8,
+        )
 
-        code128.save(
-            str(barcode_path.with_suffix("")),
-            options={
-                "module_width": 0.22,
-                "module_height": 10,
-                "write_text": False,   
-                "quiet_zone": 1,
-                "dpi": 300,
-            },
-    )
+        qr.add_data(value)
+        qr.make(fit=True)
 
-        # -------------------------------------------------
-        # Вставляем изображение в нужную ячейку
-        # -------------------------------------------------
+        img = qr.make_image(
+            fill_color="black",
+            back_color="white",
+        )
 
-        picture = self.sheet.Shapes.AddPicture(
-            str(barcode_path),
-            False,
-            True,
-            barcode_cell.Left + 2,
-            barcode_cell.Top + 2,
-            105,
-            28,
-    )
+        img.save(qr_path)
 
-        picture.Name = f"SN_BARCODE_{serial}"
+        picture = XLImage(str(qr_path))
 
-        # ---------------------------------------------------------
+        picture.width = 48
+        picture.height = 48
 
-    def get_rows(
-        self,
-        label,
-    ):
+        self.sheet.add_image(
+            picture,
+            cell,
+        )
+
+    # ---------------------------------------------------------
+
+    def get_rows(self, label):
 
         rows = []
 
-        items = getattr(label, "items", [])
+        for item in getattr(label, "items", []):
 
-        for item in items:
-
-            name = (
-                getattr(item, "name", "")
-                or ""
-            ).strip()
+            name = (item.name or "").strip()
 
             if not name:
                 continue
 
-            quantity = getattr(item, "quantity", 1)
-
-            try:
-                quantity = int(quantity)
-            except (TypeError, ValueError):
-                quantity = 1
-
-            if quantity < 1:
-                quantity = 1
-
-            rows.append((name, quantity))
-
-        if not rows:
-
-            component_fields = (
-                "cpu",
-                "cooler",
-                "motherboard",
-                "ram",
-                "storage",
-                "case",
-                "psu",
-                "gpu",
-        )
-
-            for field in component_fields:
-
-                value = getattr(label, field, "")
-
-                if value:
-                    rows.append((value, 1))
-
-            operating_system = getattr(label, "operating_system", "")
-
-            if operating_system:
-                rows.append((operating_system, 1))
+            rows.append(
+                (
+                    name,
+                    max(1, int(item.quantity or 1)),
+                )
+            )
 
         return rows
 
     # ---------------------------------------------------------
 
-    def _write_components(
-        self,
-        label,
-    ):
+    def _write_components(self, label):
 
-        c = self.coords
+        start_row = 8
 
-        first_component = c["FIRST_COMPONENT"]
-        first_qty = c["FIRST_QTY"]
+        for index, (name, qty) in enumerate(
+            self.get_rows(label),
+            start=1,
+        ):
 
-        component_column = "".join(filter(str.isalpha, first_component))
-        qty_column = "".join(filter(str.isalpha, first_qty))
+            row = start_row + index - 1
 
-        row = int(
-            "".join(filter(str.isdigit, first_component))
-        )
+            if row > 17:
+                break
 
-        for name, quantity in self.get_rows(label):
-
-            self.sheet.Range(f"{component_column}{row}").Value = name
-            self.sheet.Range(f"{qty_column}{row}").Value = quantity
-
-            row += 1
+            self._cell(f"A{row}").value = index
+            self._cell(f"B{row}").value = name
+            self._cell(f"AA{row}").value = qty

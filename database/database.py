@@ -289,14 +289,13 @@ class Database:
             # Новые поля
             # -------------------------------------------------
 
-            "model_name":
-                "TEXT DEFAULT ''",
+            "model_name": "TEXT DEFAULT ''",
 
-            "operating_system":
-                "TEXT DEFAULT ''",
+            "product_code": "TEXT DEFAULT ''",
 
-            "warranty_months":
-                "INTEGER DEFAULT 36",
+            "operating_system": "TEXT DEFAULT ''",
+
+            "warranty_months": "INTEGER DEFAULT 36",
         }
 
         for name, sql_type in columns.items():

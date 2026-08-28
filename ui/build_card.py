@@ -1,6 +1,8 @@
 from PySide6.QtCore import (
     Qt,
     Signal,
+    QEvent,
+    QTimer,
 )
 
 from PySide6.QtWidgets import (
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QAbstractItemView,
+    QLineEdit,
 )
 
 from models.label_model import LabelModel
@@ -26,6 +29,11 @@ class BuildCard(QWidget):
 
     Серийный номер комплектующего можно
     изменить двойным щелчком по колонке S/N.
+
+    При нажатии Enter:
+    - введённый S/N сохраняется;
+    - курсор переходит на следующую строку;
+    - следующая ячейка S/N открывается для ввода.
     """
 
     # item_id, новый S/N
@@ -45,9 +53,10 @@ class BuildCard(QWidget):
         # пока таблица программно заполняется.
         self._loading = False
 
-        root = QVBoxLayout(
-            self
-        )
+        # Редактор текущей ячейки.
+        self._current_editor = None
+
+        root = QVBoxLayout(self)
 
         root.setContentsMargins(
             12,
@@ -56,9 +65,7 @@ class BuildCard(QWidget):
             12,
         )
 
-        root.setSpacing(
-            10
-        )
+        root.setSpacing(10)
 
         # =====================================================
         # Заголовок
@@ -219,14 +226,12 @@ class BuildCard(QWidget):
         )
 
         # -------------------------------------------------
-        # Редактор сам по себе не запускается.
-        #
-        # Мы запускаем его вручную только после
-        # двойного щелчка по S/N.
+        # Редактирование запускается вручную
+        # двойным щелчком по S/N.
         # -------------------------------------------------
 
         self.items_table.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
+            QAbstractItemView.DoubleClicked
         )
 
         self.items_table.setSelectionBehavior(
@@ -267,7 +272,7 @@ class BuildCard(QWidget):
         )
 
         # -------------------------------------------------
-        # Редактирование S/N
+        # Сигналы
         # -------------------------------------------------
 
         self.items_table.itemDoubleClicked.connect(
@@ -369,7 +374,9 @@ class BuildCard(QWidget):
             status_frame
         )
 
-    # ---------------------------------------------------------
+    # =========================================================
+    # Загрузка карточки
+    # =========================================================
 
     def set_label(
         self,
@@ -542,8 +549,6 @@ class BuildCard(QWidget):
                     )
                 )
 
-                # ID строки build_items храним
-                # прямо в ячейке.
                 db_id = getattr(
                     item,
                     "db_id",
@@ -612,55 +617,81 @@ class BuildCard(QWidget):
 
             self._loading = False
 
-    # ---------------------------------------------------------
+    # =========================================================
+    # Редактирование S/N
+    # =========================================================
 
     def _item_double_clicked(
         self,
         item: QTableWidgetItem,
     ):
-        """
-        Разрешаем редактирование исключительно
-        ячейки серийного номера.
-        """
 
         if (
             item.column()
             != self.SERIAL_COLUMN
         ):
-
             return
 
         if (
             item.data(Qt.UserRole)
             is None
         ):
-
             return
+
+        self.items_table.setCurrentItem(
+            item
+        )
 
         self.items_table.editItem(
             item
         )
 
-    # ---------------------------------------------------------
+        # Редактор создаётся Qt.
+        # Получаем его после завершения
+        # текущего события.
+        QTimer.singleShot(
+            0,
+            self._activate_current_editor,
+        )
+
+    # =========================================================
+    # Активация текущего редактора
+    # =========================================================
+
+    def _activate_current_editor(self):
+
+        editor = self.items_table.findChild(
+            QLineEdit
+        )
+
+        if editor is None:
+            return
+
+        self._current_editor = editor
+
+        editor.installEventFilter(
+            self
+        )
+
+        editor.selectAll()
+        editor.setFocus()
+
+    # =========================================================
+    # Изменение значения
+    # =========================================================
 
     def _item_changed(
         self,
         item: QTableWidgetItem,
     ):
-        """
-        После завершения редактирования
-        сообщает BuildCardWindow новый S/N.
-        """
 
         if self._loading:
-
             return
 
         if (
             item.column()
             != self.SERIAL_COLUMN
         ):
-
             return
 
         item_id = item.data(
@@ -668,7 +699,6 @@ class BuildCard(QWidget):
         )
 
         if item_id is None:
-
             return
 
         new_serial = (
@@ -676,7 +706,9 @@ class BuildCard(QWidget):
             or ""
         ).strip()
 
+        # ---------------------------------------------
         # Нормализуем пробелы по краям.
+        # ---------------------------------------------
 
         if item.text() != new_serial:
 
@@ -712,7 +744,7 @@ class BuildCard(QWidget):
                 ].serial_number = new_serial
 
         # ---------------------------------------------
-        # Просим окно сохранить изменение.
+        # Сохраняем в БД.
         # ---------------------------------------------
 
         self.serial_number_changed.emit(
@@ -720,7 +752,236 @@ class BuildCard(QWidget):
             new_serial,
         )
 
-    # ---------------------------------------------------------
+    # =========================================================
+    # Обработка Enter в редакторе
+    # =========================================================
+
+    def eventFilter(
+        self,
+        obj,
+        event,
+    ):
+
+        if (
+            obj is self._current_editor
+            and isinstance(
+                obj,
+                QLineEdit,
+            )
+            and event.type()
+            == QEvent.KeyPress
+            and event.key()
+            in (
+                Qt.Key_Return,
+                Qt.Key_Enter,
+            )
+        ):
+
+            item = self.items_table.currentItem()
+
+            if (
+                item is not None
+                and item.column()
+                == self.SERIAL_COLUMN
+            ):
+
+                next_row = (
+                    item.row()
+                    + 1
+                )
+
+                if (
+                    next_row
+                    < self.items_table.rowCount()
+                ):
+
+                    # Запоминаем следующую строку.
+                    #
+                    # Текущий Enter НЕ перехватываем:
+                    # Qt сам завершит редактирование,
+                    # вызовет itemChanged и сохранит
+                    # серийный номер.
+                    #
+                    # После этого откроем следующую строку.
+                    QTimer.singleShot(
+                        0,
+                        lambda row=next_row:
+                        self._open_next_serial_editor(
+                            row
+                        ),
+                    )
+
+                else:
+
+                    # Последняя строка.
+                    QTimer.singleShot(
+                        0,
+                        self._clear_current_editor_reference,
+                    )
+
+            # ВАЖНО:
+            #
+            # Возвращаем False.
+            #
+            # Поэтому Qt сам обрабатывает Enter.
+            # Мы больше НЕ вызываем closeEditor()
+            # вручную и не вмешиваемся в commitData.
+            return False
+
+        return super().eventFilter(
+            obj,
+            event,
+        )
+
+    # =========================================================
+    # Открытие следующей строки
+    # =========================================================
+
+    def _open_next_serial_editor(
+        self,
+        row: int,
+    ):
+
+        # Если предыдущий редактор ещё существует,
+        # значит Qt ещё не закончил обработку Enter.
+        #
+        # Ждём ещё один цикл обработки событий.
+        existing_editor = (
+            self.items_table.findChild(
+                QLineEdit
+            )
+        )
+
+        if existing_editor is not None:
+
+            QTimer.singleShot(
+                0,
+                lambda row=row:
+                self._open_next_serial_editor(
+                    row
+                ),
+            )
+
+            return
+
+        if row < 0:
+            return
+
+        if (
+            row
+            >= self.items_table.rowCount()
+        ):
+            return
+
+        next_item = (
+            self.items_table.item(
+                row,
+                self.SERIAL_COLUMN,
+            )
+        )
+
+        if next_item is None:
+            return
+
+        if (
+            next_item.data(
+                Qt.UserRole
+            )
+            is None
+        ):
+            return
+
+        # Выбираем следующую строку.
+        self.items_table.setCurrentCell(
+            row,
+            self.SERIAL_COLUMN,
+        )
+
+        # Открываем редактирование.
+        self.items_table.editItem(
+            next_item
+        )
+
+        # Получаем QLineEdit после того,
+        # как Qt создаст редактор.
+        QTimer.singleShot(
+            0,
+            self._activate_current_editor,
+        )
+
+    # =========================================================
+    # Очистка ссылки на редактор
+    # =========================================================
+
+    def _clear_current_editor_reference(
+        self,
+    ):
+
+        self._current_editor = None
+
+    # =========================================================
+    # Принудительно завершить текущее редактирование
+    # =========================================================
+
+    def commit_pending_edit(self):
+
+        editor = self._current_editor
+
+        if editor is None:
+            return
+
+        item = self.items_table.currentItem()
+
+        if item is None:
+
+            self._current_editor = None
+            return
+
+        if (
+            item.column()
+            != self.SERIAL_COLUMN
+        ):
+
+            self._current_editor = None
+            return
+
+        # Забираем текущее значение из редактора.
+        new_serial = (
+            editor.text()
+            or ""
+        ).strip()
+
+        # Передаём его в QTableWidgetItem.
+        #
+        # itemChanged сохранит значение в БД.
+        item.setText(
+            new_serial
+        )
+
+        try:
+
+            editor.removeEventFilter(
+                self
+            )
+
+        except RuntimeError:
+
+            pass
+
+        self._current_editor = None
+
+        # Не вызываем closeEditor() вручную.
+        #
+        # Просто переводим фокус.
+        # Qt самостоятельно корректно завершит
+        # редактирование.
+        self.items_table.setFocus(
+            Qt.OtherFocusReason
+        )
+
+    # =========================================================
+    # Статус
+    # =========================================================
 
     def set_status(
         self,
@@ -770,7 +1031,9 @@ class BuildCard(QWidget):
             else "Не печатался"
         )
 
-    # ---------------------------------------------------------
+    # =========================================================
+    # Служебные методы
+    # =========================================================
 
     def lock(self):
         pass

@@ -9,6 +9,7 @@ from printing.excel_passport_writer import (
 from printing.printer_utils import (
     temporary_default_printer,
 )
+from services.template_service import TemplateService
 
 
 class ExcelPassport:
@@ -16,19 +17,32 @@ class ExcelPassport:
     Формирование паспорта изделия.
 
     Один LabelModel = один лист.
+
+    Шаблон автоматически берётся
+    из выбранного профиля шаблонов.
     """
 
     def __init__(
         self,
-        template: str,
+        template: str | None = None,
     ):
+
+        if not template:
+            template = TemplateService().passport()
 
         self.template = Path(template)
 
         if not self.template.exists():
 
+            profile = (
+                TemplateService()
+                .current_profile()
+            )
+
             raise FileNotFoundError(
-                f"Не найден шаблон {self.template}"
+                "В профиле шаблонов "
+                f'"{profile}" отсутствует файл '
+                f"{self.template.name}"
             )
 
     # ---------------------------------------------------------
@@ -129,6 +143,7 @@ class ExcelPassport:
         finally:
 
             excel.close()
+
     # ---------------------------------------------------------
 
     def print_document(
@@ -165,4 +180,3 @@ class ExcelPassport:
             finally:
 
                 excel.close()
-                

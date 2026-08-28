@@ -1,5 +1,5 @@
 ([('ByTop Production Suite.exe',
-   'C:\\Intel\\project\\build\\ByTop Production Suite\\ByTop Production '
+   'C:\\Intel\\project3\\build\\ByTop Production Suite\\ByTop Production '
    'Suite.exe',
    'EXECUTABLE'),
   ('PIL\\_avif.cp312-win_amd64.pyd',
@@ -10,6 +10,9 @@
    'EXTENSION'),
   ('PIL\\_imagingcms.cp312-win_amd64.pyd',
    'C:\\Intel\\project\\.venv\\Lib\\site-packages\\PIL\\_imagingcms.cp312-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_imagingft.cp312-win_amd64.pyd',
+   'C:\\Intel\\project\\.venv\\Lib\\site-packages\\PIL\\_imagingft.cp312-win_amd64.pyd',
    'EXTENSION'),
   ('PIL\\_imagingmath.cp312-win_amd64.pyd',
    'C:\\Intel\\project\\.venv\\Lib\\site-packages\\PIL\\_imagingmath.cp312-win_amd64.pyd',
@@ -483,7 +486,7 @@
    'C:\\Users\\eninin\\AppData\\Local\\Programs\\Python\\Python312\\DLLs\\_ssl.pyd',
    'EXTENSION'),
   ('base_library.zip',
-   'C:\\Intel\\project\\build\\ByTop Production Suite\\base_library.zip',
+   'C:\\Intel\\project3\\build\\ByTop Production Suite\\base_library.zip',
    'DATA'),
   ('libcrypto-3.dll',
    'C:\\Users\\eninin\\AppData\\Local\\Programs\\Python\\Python312\\DLLs\\libcrypto-3.dll',

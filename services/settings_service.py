@@ -16,17 +16,11 @@ class SettingsService:
         defaults = {
 
             # -------------------------------------------------
-            # Шаблоны документов
+            # Профиль шаблонов
             # -------------------------------------------------
 
-            "template_path":
-                "resources/templates/spec_v2.xlsx",
-
-            "passport_template_path":
-                "resources/templates/pass.xlsx",
-
-            "sticker_template_path":
-                "resources/templates/sticker.btw",
+            "template_profile":
+                "ByTop PE",
 
             # -------------------------------------------------
             # Принтеры
@@ -40,7 +34,6 @@ class SettingsService:
 
             "sticker_printer":
                 "",
-
         }
 
         cursor = self.db.cursor()
@@ -50,17 +43,10 @@ class SettingsService:
             cursor.execute(
                 """
                 INSERT OR IGNORE INTO settings(
-
                     key,
                     value
-
                 )
-
-                VALUES(
-
-                    ?, ?
-
-                )
+                VALUES(?, ?)
                 """,
                 (
                     key,
@@ -68,16 +54,14 @@ class SettingsService:
                 ),
             )
 
-        # ---------------------------------------------
+        # -------------------------------------------------
         # Перенос старой настройки printer
-        # ---------------------------------------------
+        # -------------------------------------------------
 
         cursor.execute(
             """
             SELECT value
-
             FROM settings
-
             WHERE key='printer'
             """
         )
@@ -102,9 +86,7 @@ class SettingsService:
                     cursor.execute(
                         """
                         UPDATE settings
-
                         SET value=?
-
                         WHERE key=?
                         """,
                         (
@@ -116,16 +98,39 @@ class SettingsService:
                 cursor.execute(
                     """
                     DELETE FROM settings
-
                     WHERE key='printer'
                     """
                 )
 
+        # -------------------------------------------------
+        # Удаляем устаревшие настройки
+        # -------------------------------------------------
+
         cursor.execute(
             """
             DELETE FROM settings
-
             WHERE key='pdf_folder'
+            """
+        )
+
+        cursor.execute(
+            """
+            DELETE FROM settings
+            WHERE key='template_path'
+            """
+        )
+
+        cursor.execute(
+            """
+            DELETE FROM settings
+            WHERE key='passport_template_path'
+            """
+        )
+
+        cursor.execute(
+            """
+            DELETE FROM settings
+            WHERE key='sticker_template_path'
             """
         )
 
@@ -143,9 +148,7 @@ class SettingsService:
         cursor.execute(
             """
             SELECT value
-
             FROM settings
-
             WHERE key=?
             """,
             (key,),
@@ -154,13 +157,10 @@ class SettingsService:
         row = cursor.fetchone()
 
         if row:
-
-            return (
-                row["value"]
-                or ""
-            )
+            return row["value"] or ""
 
         return ""
+
     # ---------------------------------------------------------
 
     def set(
@@ -174,9 +174,7 @@ class SettingsService:
         cursor.execute(
             """
             UPDATE settings
-
             SET value=?
-
             WHERE key=?
             """,
             (
@@ -187,6 +185,30 @@ class SettingsService:
 
         self.db.commit()
 
+    # ---------------------------------------------------------
+    # Профиль шаблонов
+    # ---------------------------------------------------------
+
+    def get_template_profile(self):
+
+        return self.get(
+            "template_profile"
+        )
+
+    # ---------------------------------------------------------
+
+    def set_template_profile(
+        self,
+        profile,
+    ):
+
+        self.set(
+            "template_profile",
+            profile,
+        )
+
+    # ---------------------------------------------------------
+    # Принтеры
     # ---------------------------------------------------------
 
     def get_spec_printer(self):

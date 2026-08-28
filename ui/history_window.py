@@ -18,22 +18,15 @@ class HistoryWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle(
-            "Производство"
-        )
+        self.setWindowTitle("Производство")
 
-        self.resize(
-            1200,
-            750,
-        )
+        self.resize(1200, 750)
 
         self.history = BuildHistoryService()
 
         self.panel = HistoryPanel()
 
-        self.setCentralWidget(
-            self.panel
-        )
+        self.setCentralWidget(self.panel)
 
         self.viewer = BuildCardWindow()
 
@@ -66,9 +59,7 @@ class HistoryWindow(QMainWindow):
         serial: str,
     ):
 
-        label = self.history.load_label(
-            serial
-        )
+        label = self.history.load_label(serial)
 
         if label is None:
 
@@ -80,9 +71,7 @@ class HistoryWindow(QMainWindow):
 
             return
 
-        self.viewer.set_label(
-            label
-        )
+        self.viewer.set_label(label)
 
         self.viewer.show()
         self.viewer.raise_()
@@ -96,7 +85,6 @@ class HistoryWindow(QMainWindow):
     ):
 
         if not serials:
-
             return
 
         dialog = SpecificationPrintDialog(
@@ -108,17 +96,16 @@ class HistoryWindow(QMainWindow):
             dialog.exec()
             != QDialog.DialogCode.Accepted
         ):
-
             return
+
+        printed = 0
 
         try:
 
-            result = (
-                self.history.print_specifications(
-                    serials,
-                    dialog.first_position(),
-                )
-            )
+            for serial in serials:
+
+                if self.history.print_specification(serial):
+                    printed += 1
 
         except Exception as error:
 
@@ -134,28 +121,20 @@ class HistoryWindow(QMainWindow):
 
             return
 
-        if result:
+        if printed:
 
             self.panel.mark_specification_printed(
                 serials
             )
 
-            QMessageBox.information(
-                self,
-                "Печать",
-                (
-                    "Распечатано спецификаций: "
-                    f"{len(serials)}"
-                ),
-            )
-
-        else:
-
-            QMessageBox.warning(
-                self,
-                "Ошибка",
-                "Не удалось выполнить печать.",
-            )
+        QMessageBox.information(
+            self,
+            "Печать",
+            (
+                "Распечатано спецификаций: "
+                f"{printed}"
+            ),
+        )
 
     # ---------------------------------------------------------
 
@@ -165,7 +144,6 @@ class HistoryWindow(QMainWindow):
     ):
 
         if not serials:
-
             return
 
         printed = 0
@@ -174,10 +152,7 @@ class HistoryWindow(QMainWindow):
 
             for serial in serials:
 
-                if self.history.print_passport(
-                    serial
-                ):
-
+                if self.history.print_passport(serial):
                     printed += 1
 
         except Exception as error:
@@ -217,7 +192,6 @@ class HistoryWindow(QMainWindow):
     ):
 
         if not serials:
-
             return
 
         printed_serials = []
@@ -226,13 +200,8 @@ class HistoryWindow(QMainWindow):
 
             for serial in serials:
 
-                if self.history.print_sticker(
-                    serial
-                ):
-
-                    printed_serials.append(
-                        serial
-                    )
+                if self.history.print_sticker(serial):
+                    printed_serials.append(serial)
 
         except Exception as error:
 
@@ -282,9 +251,7 @@ class HistoryWindow(QMainWindow):
         event,
     ):
 
-        super().showEvent(
-            event
-        )
+        super().showEvent(event)
 
         self.refresh()
 
@@ -296,16 +263,11 @@ class HistoryWindow(QMainWindow):
     ):
 
         if self.viewer.isVisible():
-
             self.viewer.close()
 
         try:
-
             self.history.close()
-
         except Exception:
             pass
 
-        super().closeEvent(
-            event
-        )
+        super().closeEvent(event)

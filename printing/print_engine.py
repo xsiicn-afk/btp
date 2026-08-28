@@ -1,70 +1,32 @@
-import sys
 import tempfile
 from pathlib import Path
 
 from models.label_model import LabelModel
+
 from printing.excel_specification import ExcelSpecification
 from printing.excel_passport import ExcelPassport
 from printing.bartender_sticker import BarTenderSticker
+
 from services.settings_service import SettingsService
 
 
 class PrintEngine:
     """
-    Движок формирования и печати
-    производственных документов.
-    """
+    Движок печати.
 
-    TOTAL_POSITIONS = 4
+    Новая схема:
+        одно изделие → одна спецификация 100×150.
+    """
 
     def __init__(self):
 
         self.settings = SettingsService()
 
-        template = self.settings.get(
-            "template_path"
-        )
+        self.specification = ExcelSpecification()
 
-        passport_template = self.settings.get(
-            "passport_template_path"
-        )
-
-        self.specification = ExcelSpecification(
-            template
-        )
-
-        self.passport = ExcelPassport(
-            passport_template
-        )
-
-        if getattr(
-            sys,
-            "frozen",
-            False,
-        ):
-            project_root = (
-                Path(sys.executable)
-                .resolve()
-                .parent
-            )
-        else:
-            project_root = (
-                Path(__file__)
-                .resolve()
-                .parents[1]
-            )
-
-        sticker_template = (
-            project_root
-            / "resources"
-            / "templates"
-            / "sticker.btw"
-        )
+        self.passport = ExcelPassport()
 
         self.sticker = BarTenderSticker(
-            template=str(
-                sticker_template
-            ),
             bartender=(
                 r"C:\Program Files\Seagull"
                 r"\BarTender 2021"
@@ -74,187 +36,29 @@ class PrintEngine:
 
     # ---------------------------------------------------------
 
-    @staticmethod
-    def available_positions(
-        start_position: int = 1,
-    ) -> list[int]:
-        """
-        Возвращает список свободных позиций
-        начиная с указанной.
-
-        1 -> [1, 2, 3, 4]
-        2 -> [2, 3, 4]
-        3 -> [3, 4]
-        4 -> [4]
-        """
-
-        start_position = max(
-            1,
-            min(
-                start_position,
-                PrintEngine.TOTAL_POSITIONS,
-            ),
-        )
-
-        return list(
-            range(
-                start_position,
-                PrintEngine.TOTAL_POSITIONS + 1,
-            )
-        )
-
-    # ---------------------------------------------------------
-
-    @classmethod
-    def pages_required(
-        cls,
-        labels_count: int,
-        first_position: int = 1,
-    ) -> int:
-        """
-        Возвращает количество листов,
-        необходимых для печати указанного
-        количества спецификаций.
-        """
-
-        if labels_count <= 0:
-            return 0
-
-        first_capacity = len(
-            cls.available_positions(
-                first_position
-            )
-        )
-
-        if labels_count <= first_capacity:
-            return 1
-
-        labels_count -= first_capacity
-
-        full_pages = (
-            labels_count
-            // cls.TOTAL_POSITIONS
-        )
-
-        if (
-            labels_count
-            % cls.TOTAL_POSITIONS
-        ):
-            full_pages += 1
-
-        return 1 + full_pages
-
-    # ---------------------------------------------------------
-
-    @classmethod
-    def paginate(
-        cls,
-        labels: list[LabelModel],
-        first_position: int = 1,
-    ) -> list[
-        tuple[
-            list[LabelModel],
-            list[int],
-        ]
-    ]:
-        """
-        Разбивает список этикеток
-        на страницы.
-        """
-
-        pages = []
-
-        current_start = first_position
-        index = 0
-
-        while index < len(labels):
-
-            positions = (
-                cls.available_positions(
-                    current_start
-                )
-            )
-
-            capacity = len(
-                positions
-            )
-
-            page_labels = labels[
-                index:index + capacity
-            ]
-
-            page_positions = positions[
-                :len(page_labels)
-            ]
-
-            pages.append(
-                (
-                    page_labels,
-                    page_positions,
-                )
-            )
-
-            index += len(
-                page_labels
-            )
-
-            current_start = 1
-
-        return pages
-
-    # ---------------------------------------------------------
-
     def export_excel(
         self,
-        labels: list[LabelModel],
+        label: LabelModel,
         filename: str,
-        first_position: int = 1,
     ):
 
-        for page_number, (
-            page_labels,
-            positions,
-        ) in enumerate(
-            self.paginate(
-                labels,
-                first_position,
-            )
-        ):
-
-            if page_number == 0:
-
-                self.specification.build(
-                    page_labels,
-                    filename,
-                    positions,
-                )
+        self.specification.build(
+            label,
+            filename,
+        )
 
     # ---------------------------------------------------------
 
     def export_pdf(
         self,
-        labels: list[LabelModel],
+        label: LabelModel,
         filename: str,
-        first_position: int = 1,
     ):
 
-        for page_number, (
-            page_labels,
-            positions,
-        ) in enumerate(
-            self.paginate(
-                labels,
-                first_position,
-            )
-        ):
-
-            if page_number == 0:
-
-                self.specification.export_pdf(
-                    page_labels,
-                    filename,
-                    positions,
-                )
+        self.specification.export_pdf(
+            label,
+            filename,
+        )
 
     # ---------------------------------------------------------
 
@@ -281,32 +85,19 @@ class PrintEngine:
             label,
             filename,
         )
-
     # ---------------------------------------------------------
 
     def print_to_printer(
         self,
-        labels: list[LabelModel],
-        first_position: int = 1,
+        label: LabelModel,
     ):
 
-        printer = (
-            self.settings.get_spec_printer()
+        printer = self.settings.get_spec_printer()
+
+        self.specification.print_document(
+            label,
+            printer_name=printer,
         )
-
-        for (
-            page_labels,
-            positions,
-        ) in self.paginate(
-            labels,
-            first_position,
-        ):
-
-            self.specification.print_document(
-                page_labels,
-                positions,
-                printer_name=printer,
-            )
 
     # ---------------------------------------------------------
 
@@ -315,9 +106,7 @@ class PrintEngine:
         label: LabelModel,
     ):
 
-        printer = (
-            self.settings.get_passport_printer()
-        )
+        printer = self.settings.get_passport_printer()
 
         self.passport.print_document(
             label,
@@ -331,9 +120,7 @@ class PrintEngine:
         label: LabelModel,
     ):
 
-        printer = (
-            self.settings.get_sticker_printer()
-        )
+        printer = self.settings.get_sticker_printer()
 
         return self.sticker.print(
             label,
@@ -350,20 +137,15 @@ class PrintEngine:
 
     def build_temp_excel(
         self,
-        labels: list[LabelModel],
-        first_position: int = 1,
+        label: LabelModel,
     ) -> Path:
 
         temp_dir = (
-            Path(
-                tempfile.gettempdir()
-            )
+            Path(tempfile.gettempdir())
             / "ByTop"
         )
 
-        temp_dir.mkdir(
-            exist_ok=True,
-        )
+        temp_dir.mkdir(exist_ok=True)
 
         filename = (
             temp_dir
@@ -371,9 +153,8 @@ class PrintEngine:
         )
 
         self.export_excel(
-            labels,
+            label,
             str(filename),
-            first_position,
         )
 
         return filename

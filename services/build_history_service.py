@@ -16,92 +16,45 @@ class BuildHistoryService:
     def __init__(self):
 
         self.db = Database()
-
         self.user_service = UserService()
-
         self.printer = PrintEngine()
 
     # ---------------------------------------------------------
 
     def cursor(self):
-
         return self.db.cursor()
 
     # ---------------------------------------------------------
 
     def commit(self):
-
         self.db.commit()
 
     # ---------------------------------------------------------
 
     def save(
         self,
-        label: LabelModel,
+        label,
     ):
-
-        """
-        Сохраняет созданное изделие.
-
-        Основная информация сохраняется
-        в builds.
-
-        Полный состав и серийные номера
-        комплектующих сохраняются в build_items.
-        """
-
-        cursor = self.cursor()
-
-        now = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
 
         model_name = (
             label.model_name
-            or "Системный блок"
+            or label.title
+            or label.internal_name
         )
 
-        internal_name = model_name
-        title = model_name
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        warranty_months = getattr(
-            label,
-            "warranty_months",
-            36,
-        )
+        cursor = self.db.cursor()
 
         try:
-
-            warranty_months = int(
-                warranty_months
-            )
-
-        except (
-            TypeError,
-            ValueError,
-        ):
-
-            warranty_months = 36
-
-        try:
-
-            # =================================================
-            # Основная запись изделия
-            # =================================================
 
             cursor.execute(
                 """
-                INSERT INTO builds(
-
+                INSERT OR REPLACE INTO builds(
                     serial,
                     article_code,
                     internal_name,
                     title,
-
-                    model_name,
-                    operating_system,
-                    warranty_months,
-
                     cpu,
                     motherboard,
                     cooler,
@@ -110,42 +63,29 @@ class BuildHistoryService:
                     gpu,
                     pc_case,
                     psu,
-
                     build_date,
                     created_at,
+
                     created_by,
                     version,
-
                     spec_printed,
                     passport_printed,
                     sticker_printed,
-                    deleted
 
+                    model_name,
+                    product_code,
+                    operating_system,
+                    warranty_months
                 )
-
                 VALUES(
-
-                    ?, ?, ?, ?,
-
-                    ?, ?, ?,
-
-                    ?, ?, ?, ?, ?, ?, ?, ?,
-
-                    ?, ?, ?, ?,
-
-                    ?, ?, ?, ?
-
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
                     label.serial,
                     label.article_code,
-                    internal_name,
-                    title,
-
                     model_name,
-                    label.operating_system,
-                    warranty_months,
+                    model_name,
 
                     label.cpu,
                     label.motherboard,
@@ -158,73 +98,59 @@ class BuildHistoryService:
 
                     label.date,
                     now,
-                    self.user_service.current_user,
-                    1,
 
-                    0,
-                    0,
-                    0,
-                    0,
+                    label.created_by,
+                    label.version,
+                    int(label.spec_printed),
+                    int(label.passport_printed),
+                    int(label.sticker_printed),
+
+                    model_name,
+                    label.product_code,
+                    label.operating_system,
+                    label.warranty_months,
                 ),
             )
 
-            # =================================================
-            # Комплектующие
-            # =================================================
-
-            self._save_items(
-                cursor,
-                label,
+            cursor.execute(
+                """
+                DELETE FROM build_items
+                WHERE build_serial = ?
+                """,
+                (label.serial,),
             )
 
-            self.commit()
+            self._save_items(cursor, label)
+
+            self.db.commit()
 
         except Exception:
-
             self.db.rollback()
-
             raise
-
     # ---------------------------------------------------------
 
-    def _save_items(
-        self,
-        cursor,
-        label: LabelModel,
-    ):
+    def _save_items(self, cursor, label: LabelModel):
 
         if not label.items:
-
             return
 
         for item in label.items:
 
             category = item.category
 
-            if hasattr(
-                category,
-                "value",
-            ):
-
+            if hasattr(category, "value"):
                 category = category.value
 
             cursor.execute(
                 """
                 INSERT INTO build_items(
-
                     build_serial,
                     category,
                     name,
                     quantity,
                     serial_number
-
                 )
-
-                VALUES(
-
-                    ?, ?, ?, ?, ?
-
-                )
+                VALUES(?, ?, ?, ?, ?)
                 """,
                 (
                     label.serial,
@@ -235,13 +161,7 @@ class BuildHistoryService:
                 ),
             )
 
-            # ---------------------------------------------
-            # Сразу запоминаем ID созданной строки.
-            # ---------------------------------------------
-
-            item.db_id = (
-                cursor.lastrowid
-            )
+            item.db_id = cursor.lastrowid
 
     # ---------------------------------------------------------
 
@@ -250,32 +170,19 @@ class BuildHistoryService:
         item_id: int,
         serial_number: str,
     ) -> bool:
-        """
-        Изменяет серийный номер конкретной
-        позиции уже созданного изделия.
-
-        Используется карточкой изделия.
-        """
 
         if item_id is None:
-
             return False
 
-        serial_number = (
-            serial_number
-            or ""
-        ).strip()
+        serial_number = (serial_number or "").strip()
 
         cursor = self.cursor()
 
         try:
-
             cursor.execute(
                 """
                 UPDATE build_items
-
                 SET serial_number = ?
-
                 WHERE id = ?
                 """,
                 (
@@ -286,14 +193,45 @@ class BuildHistoryService:
 
             self.commit()
 
-            return (
-                cursor.rowcount > 0
-            )
+            return cursor.rowcount > 0
 
         except Exception:
-
             self.db.rollback()
+            raise
 
+    # ---------------------------------------------------------
+
+    def delete_build(
+        self,
+        serial: str,
+    ) -> bool:
+        """
+        Полностью удаляет изделие вместе со всеми
+        комплектующими и серийными номерами.
+        """
+
+        cursor = self.cursor()
+
+        try:
+
+            cursor.execute(
+                "DELETE FROM build_items WHERE build_serial = ?",
+                (serial,),
+            )
+
+            cursor.execute(
+                "DELETE FROM builds WHERE serial = ?",
+                (serial,),
+            )
+
+            deleted = cursor.rowcount > 0
+
+            self.commit()
+
+            return deleted
+
+        except Exception:
+            self.db.rollback()
             raise
 
     # ---------------------------------------------------------
@@ -305,11 +243,8 @@ class BuildHistoryService:
         cursor.execute(
             """
             SELECT *
-
             FROM builds
-
             WHERE deleted = 0
-
             ORDER BY id DESC
             """
         )
@@ -328,9 +263,7 @@ class BuildHistoryService:
         cursor.execute(
             """
             SELECT *
-
             FROM builds
-
             WHERE serial = ?
             """,
             (serial,),
@@ -339,186 +272,59 @@ class BuildHistoryService:
         row = cursor.fetchone()
 
         if row is None:
-
             return None
 
         label = LabelModel()
 
-        # =====================================================
-        # Основные данные
-        # =====================================================
-
-        label.serial = (
-            row["serial"]
-            or ""
-        )
-
-        # -----------------------------------------------------
-        # Артикул
-        # -----------------------------------------------------
+        label.serial = row["serial"] or ""
 
         if "article_code" in row.keys():
+            label.article_code = row["article_code"] or 0
+        if "product_code" in row.keys():
+            label.product_code = row["product_code"] or ""
 
-            label.article_code = (
-                row["article_code"]
-                or 0
-            )
-
-        # -----------------------------------------------------
-        # Название модели
-        # -----------------------------------------------------
-
-        if (
-            "model_name" in row.keys()
-            and row["model_name"]
-        ):
-
-            label.model_name = (
-                row["model_name"]
-            )
-
-        elif (
-            "title" in row.keys()
-            and row["title"]
-        ):
-
-            label.model_name = (
-                row["title"]
-            )
-
+        if "model_name" in row.keys() and row["model_name"]:
+            label.model_name = row["model_name"]
+        elif "title" in row.keys() and row["title"]:
+            label.model_name = row["title"]
         else:
-
             label.model_name = ""
 
-        # -----------------------------------------------------
-        # Операционная система
-        # -----------------------------------------------------
-
         if "operating_system" in row.keys():
-
-            label.operating_system = (
-                row["operating_system"]
-                or ""
-            )
-
-        # -----------------------------------------------------
-        # Гарантия
-        # -----------------------------------------------------
+            label.operating_system = row["operating_system"] or ""
 
         if "warranty_months" in row.keys():
-
-            value = row[
-                "warranty_months"
-            ]
-
-            label.warranty_months = (
-                value
-                if value is not None
-                else 36
-            )
-
+            value = row["warranty_months"]
+            label.warranty_months = value if value is not None else 36
         else:
-
             label.warranty_months = 36
 
-        # =====================================================
-        # Характеристики
-        # =====================================================
-
-        label.cpu = (
-            row["cpu"]
-            or ""
-        )
-
-        label.motherboard = (
-            row["motherboard"]
-            or ""
-        )
-
-        label.cooler = (
-            row["cooler"]
-            or ""
-        )
-
-        label.ram = (
-            row["ram"]
-            or ""
-        )
-
-        label.storage = (
-            row["storage"]
-            or ""
-        )
-
-        label.gpu = (
-            row["gpu"]
-            or ""
-        )
-
-        label.case = (
-            row["pc_case"]
-            or ""
-        )
-
-        label.psu = (
-            row["psu"]
-            or ""
-        )
-
-        label.date = (
-            row["build_date"]
-            or ""
-        )
-
-        # =====================================================
-        # Служебные данные
-        # =====================================================
+        label.cpu = row["cpu"] or ""
+        label.motherboard = row["motherboard"] or ""
+        label.cooler = row["cooler"] or ""
+        label.ram = row["ram"] or ""
+        label.storage = row["storage"] or ""
+        label.gpu = row["gpu"] or ""
+        label.case = row["pc_case"] or ""
+        label.psu = row["psu"] or ""
+        label.date = row["build_date"] or ""
 
         if "created_by" in row.keys():
-
-            label.created_by = (
-                row["created_by"]
-                or ""
-            )
+            label.created_by = row["created_by"] or ""
 
         if "version" in row.keys():
-
-            label.version = (
-                row["version"]
-                or 1
-            )
-
-        # -----------------------------------------------------
-        # Статусы печати
-        # -----------------------------------------------------
+            label.version = row["version"] or 1
 
         if "spec_printed" in row.keys():
-
-            label.spec_printed = bool(
-                row["spec_printed"]
-            )
+            label.spec_printed = bool(row["spec_printed"])
 
         if "passport_printed" in row.keys():
-
-            label.passport_printed = bool(
-                row["passport_printed"]
-            )
+            label.passport_printed = bool(row["passport_printed"])
 
         if "sticker_printed" in row.keys():
+            label.sticker_printed = bool(row["sticker_printed"])
 
-            label.sticker_printed = bool(
-                row["sticker_printed"]
-            )
-
-        # =====================================================
-        # Комплектующие
-        # =====================================================
-
-        label.items = (
-            self._load_items(
-                serial
-            )
-        )
+        label.items = self._load_items(serial)
 
         return label
 
@@ -534,17 +340,13 @@ class BuildHistoryService:
         cursor.execute(
             """
             SELECT
-
                 id,
                 category,
                 name,
                 quantity,
                 serial_number
-
             FROM build_items
-
             WHERE build_serial = ?
-
             ORDER BY id
             """,
             (build_serial,),
@@ -556,49 +358,30 @@ class BuildHistoryService:
 
         for row in rows:
 
-            category = (
-                self._category_from_value(
-                    row["category"]
-                )
-            )
+            category = self._category_from_value(row["category"])
 
             if category is None:
-
-                category = (
-                    Category.OTHER
-                )
+                category = Category.OTHER
 
             item = Item(
                 category=category,
                 name=row["name"] or "",
                 quantity=row["quantity"] or 1,
-                serial_number=(
-                    row["serial_number"]
-                    or ""
-                ),
+                serial_number=row["serial_number"] or "",
                 db_id=row["id"],
             )
 
-            items.append(
-                item
-            )
+            items.append(item)
 
         return items
 
     # ---------------------------------------------------------
 
     @staticmethod
-    def _category_from_value(
-        value: str,
-    ) -> Category | None:
+    def _category_from_value(value: str) -> Category | None:
 
         for category in Category:
-
-            if (
-                str(category.value)
-                == str(value)
-            ):
-
+            if str(category.value) == str(value):
                 return category
 
         return None
@@ -610,16 +393,6 @@ class BuildHistoryService:
         serial: str,
         field: str,
     ) -> bool:
-        """
-        Отмечает документ как напечатанный.
-
-        Одновременно сохраняет:
-        - флаг печати;
-        - дату печати;
-        - пользователя.
-
-        Это нужно для истории и аудита.
-        """
 
         cursor = self.cursor()
 
@@ -630,46 +403,21 @@ class BuildHistoryService:
         }
 
         if field not in allowed_fields:
+            raise ValueError("Недопустимое поле состояния печати.")
 
-            raise ValueError(
-                "Недопустимое поле состояния печати."
-            )
+        printed_at = f"{field}_at"
+        printed_by = f"{field}_by"
 
-        # Например:
-        #
-        # spec_printed
-        # ->
-        # spec_printed_at
-        # spec_printed_by
-        #
-        # passport_printed
-        # ->
-        # passport_printed_at
-        # passport_printed_by
-
-        printed_at = (
-            f"{field}_at"
-        )
-
-        printed_by = (
-            f"{field}_by"
-        )
-
-        now = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute(
             f"""
             UPDATE builds
-
             SET
                 {field}=1,
                 {printed_at}=?,
                 {printed_by}=?
-
             WHERE serial=?
-
             """,
             (
                 now,
@@ -684,43 +432,22 @@ class BuildHistoryService:
 
     # ---------------------------------------------------------
 
-    def print_specifications(
+    def print_specification(
         self,
-        serials: list[str],
-        first_position: int = 1,
+        serial: str,
     ) -> bool:
 
-        labels = []
+        label = self.load_label(serial)
 
-        for serial in serials:
-
-            label = self.load_label(
-                serial
-            )
-
-            if label:
-
-                labels.append(
-                    label
-                )
-
-        if not labels:
-
+        if label is None:
             return False
 
-        self.printer.print_to_printer(
-            labels,
-            first_position,
+        self.printer.print_to_printer(label)
+
+        return self._mark_printed(
+            serial,
+            "spec_printed",
         )
-
-        for serial in serials:
-
-            self._mark_printed(
-                serial,
-                "spec_printed",
-            )
-
-        return True
 
     # ---------------------------------------------------------
 
@@ -729,22 +456,14 @@ class BuildHistoryService:
         serial: str,
     ) -> bool:
 
-        label = self.load_label(
-            serial
-        )
+        label = self.load_label(serial)
 
         if label is None:
-
             return False
 
-        self.printer.print_passport(
-            label
-        )
+        self.printer.print_passport(label)
 
-        return self._mark_printed(
-            serial,
-            "passport_printed",
-        )
+        return self._mark_printed(serial, "passport_printed")
 
     # ---------------------------------------------------------
 
@@ -753,25 +472,16 @@ class BuildHistoryService:
         serial: str,
     ) -> bool:
 
-        label = self.load_label(
-            serial
-        )
+        label = self.load_label(serial)
 
         if label is None:
-
             return False
 
-        self.printer.print_sticker(
-            label
-        )
+        self.printer.print_sticker(label)
 
-        return self._mark_printed(
-            serial,
-            "sticker_printed",
-        )
+        return self._mark_printed(serial, "sticker_printed")
 
     # ---------------------------------------------------------
 
     def close(self):
-
         self.printer.close()

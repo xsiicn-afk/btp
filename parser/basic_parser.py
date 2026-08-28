@@ -14,6 +14,8 @@ class BasicParser:
 
         configuration = Configuration()
 
+        configuration.product_code = ""
+
         lines = text.splitlines()
 
         for line in lines:
@@ -69,6 +71,25 @@ class BasicParser:
                 continue
 
             upper = clean.upper()
+
+            # ---------------------------------------------
+            # Код продукции
+            #
+            # Поддерживаются:
+            #   КОД: 101259
+            #   КОД 101259
+            # ---------------------------------------------
+
+            if upper.startswith("КОД"):
+
+                configuration.product_code = re.sub(
+                    r"^КОД\s*:?\s*",
+                    "",
+                    clean,
+                    flags=re.IGNORECASE,
+                ).strip()
+
+                continue
 
             quantity = self.extract_quantity(
                 clean
